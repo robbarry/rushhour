@@ -70,18 +70,73 @@ export class Road {
   }
 
   private drawRoad(color: number = PALETTE.ROAD_ASPHALT): void {
+    // Layer 1: Shoulder (widest, drawn first)
+    this.graphics.lineStyle(DIMENSIONS.ROAD_SHOULDER_WIDTH, PALETTE.ROAD_SHOULDER)
+    this.graphics.beginPath()
+    this.graphics.moveTo(this.fromNode.x, this.fromNode.y)
+    this.graphics.lineTo(this.toNode.x, this.toNode.y)
+    this.graphics.strokePath()
+
+    // Layer 2: Asphalt (narrower, on top of shoulder)
     this.graphics.lineStyle(DIMENSIONS.ROAD_WIDTH, color)
     this.graphics.beginPath()
     this.graphics.moveTo(this.fromNode.x, this.fromNode.y)
     this.graphics.lineTo(this.toNode.x, this.toNode.y)
     this.graphics.strokePath()
 
-    // Road markings
-    this.graphics.lineStyle(DIMENSIONS.ROAD_MARKING_WIDTH, PALETTE.ROAD_MARKING_CENTER, 0.5)
+    // Layer 3: White edge lines (solid, at ±10px offset from center)
+    const angle = Math.atan2(this.toNode.y - this.fromNode.y, this.toNode.x - this.fromNode.x)
+    const perpAngle = angle + Math.PI / 2
+    const offsetX = Math.cos(perpAngle) * DIMENSIONS.ROAD_EDGE_LINE_OFFSET
+    const offsetY = Math.sin(perpAngle) * DIMENSIONS.ROAD_EDGE_LINE_OFFSET
+
+    // Left edge line
+    this.graphics.lineStyle(DIMENSIONS.ROAD_EDGE_LINE_WIDTH, PALETTE.ROAD_MARKING_EDGE, 0.7)
     this.graphics.beginPath()
-    this.graphics.moveTo(this.fromNode.x, this.fromNode.y)
-    this.graphics.lineTo(this.toNode.x, this.toNode.y)
+    this.graphics.moveTo(this.fromNode.x + offsetX, this.fromNode.y + offsetY)
+    this.graphics.lineTo(this.toNode.x + offsetX, this.toNode.y + offsetY)
     this.graphics.strokePath()
+
+    // Right edge line
+    this.graphics.beginPath()
+    this.graphics.moveTo(this.fromNode.x - offsetX, this.fromNode.y - offsetY)
+    this.graphics.lineTo(this.toNode.x - offsetX, this.toNode.y - offsetY)
+    this.graphics.strokePath()
+
+    // Layer 4: Dashed center yellow line
+    this.drawDashedCenterLine()
+  }
+
+  private drawDashedCenterLine(): void {
+    // Calculate road direction and length
+    const dx = this.toNode.x - this.fromNode.x
+    const dy = this.toNode.y - this.fromNode.y
+    const length = Math.sqrt(dx * dx + dy * dy)
+    const angle = Math.atan2(dy, dx)
+
+    // Dash pattern: 8px dash, 8px gap
+    const dashLength = 8
+    const gapLength = 8
+    const patternLength = dashLength + gapLength
+
+    this.graphics.lineStyle(DIMENSIONS.ROAD_MARKING_WIDTH, PALETTE.ROAD_MARKING_CENTER, 0.6)
+
+    let traveled = 0
+    while (traveled < length) {
+      const dashEnd = Math.min(traveled + dashLength, length)
+
+      const startX = this.fromNode.x + Math.cos(angle) * traveled
+      const startY = this.fromNode.y + Math.sin(angle) * traveled
+      const endX = this.fromNode.x + Math.cos(angle) * dashEnd
+      const endY = this.fromNode.y + Math.sin(angle) * dashEnd
+
+      this.graphics.beginPath()
+      this.graphics.moveTo(startX, startY)
+      this.graphics.lineTo(endX, endY)
+      this.graphics.strokePath()
+
+      traveled += patternLength
+    }
   }
 
   updateSnow(): void {

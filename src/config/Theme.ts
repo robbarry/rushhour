@@ -24,6 +24,7 @@ export const PALETTE = {
   BACKGROUND: 0x1a1c29,           // Dark Slate Blue
 
   // Roads
+  ROAD_SHOULDER: 0x252738,        // Dark shoulder (darker than asphalt)
   ROAD_ASPHALT: 0x33354a,         // Cool Gray
   ROAD_ASPHALT_HOVER: 0x444466,   // Lighter gray for hover
   ROAD_MARKING_CENTER: 0xfbbf24,  // Faded Yellow
@@ -77,9 +78,12 @@ export const DIMENSIONS = {
   GAME_HEIGHT: 600,
 
   // Roads
-  ROAD_WIDTH: 24,
+  ROAD_SHOULDER_WIDTH: 28,        // Outer shoulder layer
+  ROAD_WIDTH: 24,                 // Inner asphalt layer
   ROAD_HIT_PADDING: 10,           // Extra hit area around roads
   ROAD_MARKING_WIDTH: 2,
+  ROAD_EDGE_LINE_WIDTH: 1,        // White edge lines
+  ROAD_EDGE_LINE_OFFSET: 10,      // Distance from center to edge lines
 
   // Vehicles
   CAR_SIZE: 12,
