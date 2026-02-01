@@ -90,6 +90,7 @@ export const DIMENSIONS = {
   CAR_SIZE: 12,
   PLOW_SIZE: 18,
   TOW_TRUCK_SIZE: 16,
+  LANE_OFFSET: 5,                 // Distance from centerline to lane center
 
   // Intersections
   INTERSECTION_RADIUS: 16,

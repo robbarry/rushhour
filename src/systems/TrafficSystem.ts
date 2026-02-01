@@ -3,6 +3,7 @@
 import { RoadNetwork, getPositionOnPath } from '../data/RoadNetwork'
 import { findPath } from './PathFinding'
 import { Edge } from '../data/RoadNetwork'
+import { DIMENSIONS } from '../config/Theme'
 
 export interface CarData {
   id: string
@@ -105,15 +106,17 @@ export class TrafficSystem {
     }
   }
 
-  getCarPosition(car: CarData): { x: number, y: number } {
+  getCarPosition(car: CarData): { x: number, y: number, angle: number } {
+    // Cars drive on the right side of the road (positive lane offset)
     const pos = getPositionOnPath(
       this.network,
       car.path,
       car.pathIndex,
       car.progress,
-      car.currentNodeId
+      car.currentNodeId,
+      DIMENSIONS.LANE_OFFSET
     )
-    return { x: pos.x, y: pos.y }
+    return { x: pos.x, y: pos.y, angle: pos.angle }
   }
 
   getCurrentEdge(car: CarData): Edge | null {
@@ -121,12 +124,12 @@ export class TrafficSystem {
     return car.path[car.pathIndex]
   }
 
-  // Get all cars on the same edge that would block this car
-  getCarsBlockingOn(car: CarData): { car: CarData, distance: number }[] {
+  // Get cars ahead in the SAME LANE (same direction on same edge)
+  getCarsAheadInLane(car: CarData): { car: CarData, distance: number }[] {
     const edge = this.getCurrentEdge(car)
     if (!edge) return []
 
-    const blocking: { car: CarData, distance: number }[] = []
+    const ahead: { car: CarData, distance: number }[] = []
 
     for (const otherCar of this.cars.values()) {
       if (otherCar.id === car.id) continue
@@ -134,42 +137,36 @@ export class TrafficSystem {
       const otherEdge = this.getCurrentEdge(otherCar)
       if (!otherEdge || otherEdge.id !== edge.id) continue
 
-      // Calculate position along edge from car's perspective
-      let otherPosition: number
-      if (otherCar.currentNodeId === car.currentNodeId) {
-        // Same direction - their progress is directly comparable
-        otherPosition = otherCar.progress
-      } else {
-        // Opposite direction - flip their progress
-        otherPosition = 1 - otherCar.progress
-      }
+      // Only check cars going the SAME direction (same lane)
+      // Opposite direction cars are in the other lane - they pass by
+      if (otherCar.currentNodeId !== car.currentNodeId) continue
 
-      // Check if other car is ahead of us (higher position from our perspective)
-      if (otherPosition > car.progress) {
-        blocking.push({
+      // Check if other car is ahead of us
+      if (otherCar.progress > car.progress) {
+        ahead.push({
           car: otherCar,
-          distance: otherPosition - car.progress
+          distance: otherCar.progress - car.progress
         })
       }
     }
 
-    return blocking.sort((a, b) => a.distance - b.distance)
+    return ahead.sort((a, b) => a.distance - b.distance)
   }
 
-  // Check if there's a car blocking ahead within threshold
+  // Check if there's a car blocking ahead in our lane
   isBlockedByCarAhead(car: CarData, threshold: number = 0.12): CarData | null {
-    const blocking = this.getCarsBlockingOn(car)
-    if (blocking.length === 0) return null
+    const ahead = this.getCarsAheadInLane(car)
+    if (ahead.length === 0) return null
 
-    const nearest = blocking[0]
+    const nearest = ahead[0]
 
     // Stop if close to a stuck or waiting car
     if (nearest.distance < threshold && (nearest.car.stuck || nearest.car.waiting)) {
       return nearest.car
     }
 
-    // Stop if very close to ANY car to prevent overlap
-    if (nearest.distance < 0.10) {
+    // Stop if very close to ANY car ahead to prevent overlap
+    if (nearest.distance < 0.08) {
       return nearest.car
     }
 

@@ -659,13 +659,38 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Clear snow while moving
+      // Check if blocked by a stuck car on this edge
+      let blockedByStuckCar = false
       if (currentEdge) {
+        const carsData = this.trafficSystem.getCars()
+        for (const car of carsData) {
+          if (!car.stuck) continue
+          const carEdge = this.trafficSystem.getCurrentEdge(car)
+          if (!carEdge || carEdge.id !== currentEdge.id) continue
+
+          // Calculate car's position from plow's perspective
+          let carPosOnEdge: number
+          if (car.currentNodeId === data.currentNodeId) {
+            carPosOnEdge = car.progress
+          } else {
+            carPosOnEdge = 1 - car.progress
+          }
+
+          // If stuck car is ahead of plow, block
+          if (carPosOnEdge > data.progress && carPosOnEdge - data.progress < 0.3) {
+            blockedByStuckCar = true
+            break
+          }
+        }
+      }
+
+      // Clear snow while moving (only if not blocked)
+      if (currentEdge && !blockedByStuckCar) {
         this.snowSystem.clearSnow(currentEdge.id, 15 * deltaSeconds)
       }
 
-      // Move plow
-      if (currentEdge) {
+      // Move plow (only if not blocked)
+      if (currentEdge && !blockedByStuckCar) {
         const edgeLength = this.getEdgeLength(currentEdge)
         data.progress += (data.speed * deltaSeconds) / edgeLength
 
