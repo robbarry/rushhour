@@ -84,7 +84,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createAmbientEffects(): void {
-    // Create vignette overlay - radial gradient from transparent center to dark edges
+    // Create subtle vignette overlay - only darken edges, keep center clear
     const vignetteGraphics = this.add.graphics()
     vignetteGraphics.setDepth(DEPTH.VIGNETTE)
 
@@ -92,24 +92,28 @@ export class GameScene extends Phaser.Scene {
     const centerY = DIMENSIONS.GAME_HEIGHT / 2
     const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY)
 
-    // Draw concentric rings from outer edge inward with decreasing alpha
-    // This creates a radial gradient effect
-    const steps = 50
+    // Draw rings from edge inward, only covering the outer 30% of the screen
+    const innerClearRadius = maxRadius * 0.7  // Keep center 70% clear
+    const steps = 20
+
     for (let i = 0; i < steps; i++) {
       const ratio = i / steps
-      const radius = maxRadius * (1 - ratio)
-      // Alpha decreases from edge (0.5) to center (0)
-      // Using a quadratic falloff for smoother transition
-      const alpha = 0.5 * ratio * ratio
+      // Start from innerClearRadius and go to maxRadius
+      const innerR = innerClearRadius + (maxRadius - innerClearRadius) * ratio
+      const outerR = innerClearRadius + (maxRadius - innerClearRadius) * (ratio + 1/steps)
 
-      vignetteGraphics.fillStyle(0x000000, alpha)
-      vignetteGraphics.fillCircle(centerX, centerY, radius)
+      // Alpha increases toward edge, max 0.3
+      const alpha = 0.3 * ratio
+
+      // Draw a ring using lineStyle
+      vignetteGraphics.lineStyle(outerR - innerR + 2, 0x000000, alpha)
+      vignetteGraphics.strokeCircle(centerX, centerY, (innerR + outerR) / 2)
     }
 
     // Add bloom post-processing effect on camera for snow glow
     // Phaser 3.60+ supports PostFX pipeline
     if (this.cameras.main.postFX) {
-      this.cameras.main.postFX.addBloom(0xffffff, 1, 1, 0.5, 1.2)
+      this.cameras.main.postFX.addBloom(0xffffff, 1, 1, 0.3, 1.1)
     }
   }
 
