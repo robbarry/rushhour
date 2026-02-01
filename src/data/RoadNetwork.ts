@@ -21,42 +21,93 @@ export interface RoadNetwork {
   adjacency: Map<string, string[]> // nodeId -> edgeIds
 }
 
-// Create the highway + exits layout
+// Create a 3x3 grid town layout with many route options
+// Layout (9 intersections in a grid, 4 endpoints, depot at bottom):
+//
+//            [North]
+//               |
+//     (NW)----(NC)----(NE)
+//       |   \   |   /   |
+//       |    \  |  /    |
+// [West]-(CW)----(CC)----(CE)-[East]
+//       |    /  |  \    |
+//       |   /   |   \   |
+//     (SW)----(SC)----(SE)
+//               |
+//            [South]
+//               |
+//            [Depot]
+//
 export function createDefaultNetwork(): RoadNetwork {
   const nodes = new Map<string, Node>()
   const edges = new Map<string, Edge>()
   const adjacency = new Map<string, string[]>()
 
-  // Highway endpoints
-  nodes.set('west', { id: 'west', x: 50, y: 300, type: 'endpoint' })
-  nodes.set('east', { id: 'east', x: 750, y: 300, type: 'endpoint' })
+  const centerX = 400
+  const centerY = 280
+  const gridSpacing = 120
 
-  // Highway intersections (where exits connect)
-  nodes.set('int-a', { id: 'int-a', x: 250, y: 300, type: 'intersection' })
-  nodes.set('int-b', { id: 'int-b', x: 500, y: 300, type: 'intersection' })
+  // 3x3 grid of intersections
+  // Row 0 (top): NW, NC, NE
+  nodes.set('NW', { id: 'NW', x: centerX - gridSpacing, y: centerY - gridSpacing, type: 'intersection' })
+  nodes.set('NC', { id: 'NC', x: centerX, y: centerY - gridSpacing, type: 'intersection' })
+  nodes.set('NE', { id: 'NE', x: centerX + gridSpacing, y: centerY - gridSpacing, type: 'intersection' })
 
-  // Exit endpoints (north and south of intersections)
-  nodes.set('exit-a-north', { id: 'exit-a-north', x: 250, y: 100, type: 'endpoint' })
-  nodes.set('exit-a-south', { id: 'exit-a-south', x: 250, y: 500, type: 'endpoint' })
-  nodes.set('exit-b-north', { id: 'exit-b-north', x: 500, y: 100, type: 'endpoint' })
-  nodes.set('exit-b-south', { id: 'exit-b-south', x: 500, y: 500, type: 'endpoint' })
+  // Row 1 (middle): CW, CC (center), CE
+  nodes.set('CW', { id: 'CW', x: centerX - gridSpacing, y: centerY, type: 'intersection' })
+  nodes.set('CC', { id: 'CC', x: centerX, y: centerY, type: 'intersection' })
+  nodes.set('CE', { id: 'CE', x: centerX + gridSpacing, y: centerY, type: 'intersection' })
 
-  // Plow depot
-  nodes.set('depot', { id: 'depot', x: 50, y: 400, type: 'depot' })
+  // Row 2 (bottom): SW, SC, SE
+  nodes.set('SW', { id: 'SW', x: centerX - gridSpacing, y: centerY + gridSpacing, type: 'intersection' })
+  nodes.set('SC', { id: 'SC', x: centerX, y: centerY + gridSpacing, type: 'intersection' })
+  nodes.set('SE', { id: 'SE', x: centerX + gridSpacing, y: centerY + gridSpacing, type: 'intersection' })
 
-  // Highway segments
-  addEdge('hw-1', 'west', 'int-a')
-  addEdge('hw-2', 'int-a', 'int-b')
-  addEdge('hw-3', 'int-b', 'east')
+  // Endpoints (traffic entry/exit)
+  nodes.set('north', { id: 'north', x: centerX, y: centerY - gridSpacing - 100, type: 'endpoint' })
+  nodes.set('south', { id: 'south', x: centerX, y: centerY + gridSpacing + 100, type: 'endpoint' })
+  nodes.set('east', { id: 'east', x: centerX + gridSpacing + 100, y: centerY, type: 'endpoint' })
+  nodes.set('west', { id: 'west', x: centerX - gridSpacing - 100, y: centerY, type: 'endpoint' })
 
-  // Exit ramps
-  addEdge('exit-a-n', 'int-a', 'exit-a-north')
-  addEdge('exit-a-s', 'int-a', 'exit-a-south')
-  addEdge('exit-b-n', 'int-b', 'exit-b-north')
-  addEdge('exit-b-s', 'int-b', 'exit-b-south')
+  // Depot at the very bottom
+  nodes.set('depot', { id: 'depot', x: centerX, y: centerY + gridSpacing + 180, type: 'depot' })
 
-  // Depot connection
-  addEdge('depot-road', 'depot', 'west')
+  // === HORIZONTAL ROADS (6 roads) ===
+  // Top row
+  addEdge('h-nw-nc', 'NW', 'NC')
+  addEdge('h-nc-ne', 'NC', 'NE')
+  // Middle row
+  addEdge('h-cw-cc', 'CW', 'CC')
+  addEdge('h-cc-ce', 'CC', 'CE')
+  // Bottom row
+  addEdge('h-sw-sc', 'SW', 'SC')
+  addEdge('h-sc-se', 'SC', 'SE')
+
+  // === VERTICAL ROADS (6 roads) ===
+  // Left column
+  addEdge('v-nw-cw', 'NW', 'CW')
+  addEdge('v-cw-sw', 'CW', 'SW')
+  // Center column
+  addEdge('v-nc-cc', 'NC', 'CC')
+  addEdge('v-cc-sc', 'CC', 'SC')
+  // Right column
+  addEdge('v-ne-ce', 'NE', 'CE')
+  addEdge('v-ce-se', 'CE', 'SE')
+
+  // === DIAGONAL ROADS (4 roads through center) ===
+  addEdge('d-nw-cc', 'NW', 'CC')  // NW to center
+  addEdge('d-ne-cc', 'NE', 'CC')  // NE to center
+  addEdge('d-sw-cc', 'SW', 'CC')  // SW to center
+  addEdge('d-se-cc', 'SE', 'CC')  // SE to center
+
+  // === ENDPOINT CONNECTIONS (4 roads) ===
+  addEdge('ep-north', 'north', 'NC')
+  addEdge('ep-south', 'south', 'SC')
+  addEdge('ep-east', 'east', 'CE')
+  addEdge('ep-west', 'west', 'CW')
+
+  // === DEPOT ROAD ===
+  addEdge('depot-road', 'depot', 'south')
 
   function addEdge(id: string, from: string, to: string) {
     edges.set(id, { id, from, to, snow: 0, blocked: false })

@@ -7,7 +7,8 @@ import { SNOW_LEVELS } from '../systems/SnowSystem'
 export class Road {
   private graphics: Phaser.GameObjects.Graphics
   private snowOverlay: Phaser.GameObjects.Graphics
-  private hitArea: Phaser.GameObjects.Rectangle
+  private hitGraphics: Phaser.GameObjects.Graphics
+  private hitPolygon: Phaser.Geom.Polygon
   public edge: Edge
   private fromNode: Node
   private toNode: Node
@@ -26,33 +27,44 @@ export class Road {
     // Snow overlay
     this.snowOverlay = scene.add.graphics()
 
-    // Hit area for clicking
-    const midX = (fromNode.x + toNode.x) / 2
-    const midY = (fromNode.y + toNode.y) / 2
-    const length = Math.sqrt(
-      (toNode.x - fromNode.x) ** 2 + (toNode.y - fromNode.y) ** 2
-    )
+    // Create polygon hit area that matches actual road shape
+    const hitWidth = this.ROAD_WIDTH + 10
+    this.hitPolygon = this.calculateRoadPolygon(fromNode, toNode, hitWidth)
 
-    this.hitArea = scene.add.rectangle(midX, midY, length, this.ROAD_WIDTH + 10, 0x000000, 0)
-    this.hitArea.setInteractive()
+    // Invisible graphics for hit detection
+    this.hitGraphics = scene.add.graphics()
+    this.hitGraphics.fillStyle(0x000000, 0.001) // Nearly invisible
+    this.hitGraphics.fillPoints(this.hitPolygon.points, true)
+    this.hitGraphics.setInteractive(this.hitPolygon, Phaser.Geom.Polygon.Contains)
 
-    // Rotate hit area to match road
-    const angle = Math.atan2(toNode.y - fromNode.y, toNode.x - fromNode.x)
-    this.hitArea.setRotation(angle)
-
-    this.hitArea.on('pointerdown', () => {
+    this.hitGraphics.on('pointerdown', () => {
       scene.events.emit('roadClicked', this.edge)
     })
 
-    this.hitArea.on('pointerover', () => {
+    this.hitGraphics.on('pointerover', () => {
       this.graphics.clear()
       this.drawRoad(0x666666)
     })
 
-    this.hitArea.on('pointerout', () => {
+    this.hitGraphics.on('pointerout', () => {
       this.graphics.clear()
       this.drawRoad()
     })
+  }
+
+  private calculateRoadPolygon(from: Node, to: Node, width: number): Phaser.Geom.Polygon {
+    const angle = Math.atan2(to.y - from.y, to.x - from.x)
+    const perpAngle = angle + Math.PI / 2
+    const hw = width / 2
+    const dx = Math.cos(perpAngle) * hw
+    const dy = Math.sin(perpAngle) * hw
+
+    return new Phaser.Geom.Polygon([
+      from.x + dx, from.y + dy,
+      to.x + dx, to.y + dy,
+      to.x - dx, to.y - dy,
+      from.x - dx, from.y - dy
+    ])
   }
 
   private drawRoad(color: number = 0x444444): void {
@@ -97,6 +109,6 @@ export class Road {
   destroy(): void {
     this.graphics.destroy()
     this.snowOverlay.destroy()
-    this.hitArea.destroy()
+    this.hitGraphics.destroy()
   }
 }

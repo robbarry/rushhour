@@ -27,6 +27,15 @@ export class GameScene extends Phaser.Scene {
 
   private snowParticles!: Phaser.GameObjects.Particles.ParticleEmitter
   private scoreText!: Phaser.GameObjects.Text
+  private stormText!: Phaser.GameObjects.Text
+  private plowStatusText!: Phaser.GameObjects.Text
+
+  // Plow cooldown
+  private plowCooldown: number = 0
+  private readonly PLOW_COOLDOWN_TIME: number = 2000 // 2 seconds
+
+  // Score tracking
+  private score: number = 0
 
   constructor() {
     super({ key: 'GameScene' })
@@ -57,16 +66,6 @@ export class GameScene extends Phaser.Scene {
       this.dispatchPlow(edge)
     })
 
-    // Listen for intersection toggles
-    this.events.on('intersectionToggled', (node: { id: string }, blocked: boolean) => {
-      // Mark all edges from this intersection as blocked/unblocked
-      const edgeIds = this.network.adjacency.get(node.id) || []
-      for (const edgeId of edgeIds) {
-        const edge = this.network.edges.get(edgeId)!
-        edge.blocked = blocked
-      }
-    })
-
     // Create snow particles
     this.createSnowParticles()
 
@@ -76,7 +75,7 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff'
     }).setDepth(100)
 
-    this.add.text(10, 40, 'Click road: dispatch plow | Click intersection: toggle blocker', {
+    this.add.text(10, 40, 'Click road to dispatch plow', {
       fontSize: '14px',
       color: '#aaaaaa'
     }).setDepth(100)
@@ -84,6 +83,16 @@ export class GameScene extends Phaser.Scene {
     this.scoreText = this.add.text(10, 70, '', {
       fontSize: '16px',
       color: '#00ff00'
+    }).setDepth(100)
+
+    this.stormText = this.add.text(10, 95, '', {
+      fontSize: '16px',
+      color: '#ffffff'
+    }).setDepth(100)
+
+    this.plowStatusText = this.add.text(10, 120, '', {
+      fontSize: '16px',
+      color: '#ffff00'
     }).setDepth(100)
   }
 
@@ -110,6 +119,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private dispatchPlow(targetEdge: Edge): void {
+    // Check cooldown
+    if (this.plowCooldown > 0) return
+
     // Find path from depot to target edge
     // Check both ends of the target edge to see which is closer
     const depotNode = 'depot'
@@ -151,6 +163,9 @@ export class GameScene extends Phaser.Scene {
 
     const plow = new Plow(this, plowData)
     this.plows.set(plowData.id, plow)
+
+    // Start cooldown
+    this.plowCooldown = this.PLOW_COOLDOWN_TIME
   }
 
   private dispatchTowTruck(stuckCar: CarData): void {
@@ -198,6 +213,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Update plow cooldown
+    if (this.plowCooldown > 0) {
+      this.plowCooldown -= delta
+    }
+
     // Update snow
     this.snowSystem.update(delta)
 
@@ -218,10 +238,46 @@ export class GameScene extends Phaser.Scene {
     // Update tow trucks
     this.updateTowTrucks(delta)
 
-    // Update score UI
+    // Update HUD
+    this.updateHUD()
+  }
+
+  private updateHUD(): void {
+    // Calculate score: Cars exited (+10), Rescued (+5)
+    this.score = this.trafficSystem.stats.exited * 10 + this.trafficSystem.stats.rescued * 5
+
+    // Count clear roads for bonus
+    let clearRoads = 0
+    for (const edge of this.network.edges.values()) {
+      if (edge.id !== 'depot-road' && edge.snow <= 2) {
+        clearRoads++
+      }
+    }
+
     this.scoreText.setText(
-      `Exited: ${this.trafficSystem.stats.exited} | Rescued: ${this.trafficSystem.stats.rescued} | Stuck: ${this.trafficSystem.stuckCount}`
+      `Score: ${this.score} | Exited: ${this.trafficSystem.stats.exited} | Rescued: ${this.trafficSystem.stats.rescued} | Stuck: ${this.trafficSystem.stuckCount}`
     )
+
+    // Storm phase indicator with color coding
+    const intensity = this.snowSystem.currentIntensity
+    let stormColor = '#aaaaaa'
+    if (intensity >= 2.0) stormColor = '#ff4444'
+    else if (intensity >= 1.5) stormColor = '#ffaa00'
+    else if (intensity >= 0.5) stormColor = '#ffffff'
+    else stormColor = '#88ff88'
+
+    this.stormText.setStyle({ color: stormColor })
+    this.stormText.setText(`Storm: ${this.snowSystem.currentPhaseName}`)
+
+    // Plow status
+    if (this.plowCooldown > 0) {
+      const remaining = Math.ceil(this.plowCooldown / 1000)
+      this.plowStatusText.setText(`Plow: Ready in ${remaining}s`)
+      this.plowStatusText.setStyle({ color: '#ff8888' })
+    } else {
+      this.plowStatusText.setText('Plow: READY')
+      this.plowStatusText.setStyle({ color: '#88ff88' })
+    }
   }
 
   private updateCars(delta: number): void {
@@ -262,6 +318,7 @@ export class GameScene extends Phaser.Scene {
 
       if (carData.stuck) {
         carData.stuckTime += delta
+        carData.waiting = false
         // Still update position for rendering
         const pos = this.trafficSystem.getCarPosition(carData)
         const nextPos = this.getNextPosition(carData)
@@ -269,6 +326,23 @@ export class GameScene extends Phaser.Scene {
         car.draw(pos.x, pos.y, angle)
         continue
       }
+
+      // Check if blocked by car ahead (queueing)
+      const blockingCar = this.trafficSystem.isBlockedByCarAhead(carData)
+      if (blockingCar) {
+        carData.waiting = true
+        // Still render at current position
+        const pos = this.trafficSystem.getCarPosition(carData)
+        const nextPos = this.getNextPosition(carData)
+        const angle = Math.atan2(nextPos.y - pos.y, nextPos.x - pos.x)
+        car.draw(pos.x, pos.y, angle)
+        continue
+      }
+
+      carData.waiting = false
+
+      // Try to reroute if current path is bad
+      this.trafficSystem.tryReroute(carData)
 
       // Calculate speed with snow penalty
       const snowPenalty = Math.max(0.2, 1 - currentEdge.snow * 0.08)
@@ -280,14 +354,10 @@ export class GameScene extends Phaser.Scene {
 
       // Check if reached end of current edge
       if (carData.progress >= 1) {
+        // Update currentNodeId to the end of this edge BEFORE incrementing pathIndex
+        carData.currentNodeId = getOtherNode(currentEdge, carData.currentNodeId)
         carData.progress = 0
         carData.pathIndex++
-
-        if (carData.pathIndex < carData.path.length) {
-          // Update current node
-          const prevEdge = carData.path[carData.pathIndex - 1]
-          carData.currentNodeId = getOtherNode(prevEdge, carData.currentNodeId)
-        }
       }
 
       // Draw car
@@ -349,13 +419,10 @@ export class GameScene extends Phaser.Scene {
         data.progress += (data.speed * deltaSeconds) / edgeLength
 
         if (data.progress >= 1) {
+          // Update currentNodeId to the end of this edge BEFORE incrementing pathIndex
+          data.currentNodeId = getOtherNode(currentEdge, data.currentNodeId)
           data.progress = 0
           data.pathIndex++
-
-          if (data.pathIndex < data.path.length) {
-            const prevEdge = data.path[data.pathIndex - 1]
-            data.currentNodeId = getOtherNode(prevEdge, data.currentNodeId)
-          }
         }
       }
 
@@ -429,13 +496,10 @@ export class GameScene extends Phaser.Scene {
         data.progress += (data.speed * deltaSeconds) / edgeLength
 
         if (data.progress >= 1) {
+          // Update currentNodeId to the end of this edge BEFORE incrementing pathIndex
+          data.currentNodeId = getOtherNode(currentEdge, data.currentNodeId)
           data.progress = 0
           data.pathIndex++
-
-          if (data.pathIndex < data.path.length) {
-            const prevEdge = data.path[data.pathIndex - 1]
-            data.currentNodeId = getOtherNode(prevEdge, data.currentNodeId)
-          }
         }
       }
 

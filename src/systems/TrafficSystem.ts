@@ -14,6 +14,8 @@ export interface CarData {
   speed: number
   stuck: boolean
   stuckTime: number
+  waiting: boolean // waiting behind another car
+  rerouteCheckTimer: number // frames until next reroute check
 }
 
 export class TrafficSystem {
@@ -32,9 +34,7 @@ export class TrafficSystem {
 
   // Endpoints where cars can spawn/despawn
   private endpoints: string[] = [
-    'west', 'east',
-    'exit-a-north', 'exit-a-south',
-    'exit-b-north', 'exit-b-south'
+    'north', 'south', 'east', 'west'
   ]
 
   constructor(network: RoadNetwork) {
@@ -69,7 +69,9 @@ export class TrafficSystem {
       progress: 0,
       speed: 100 + Math.random() * 50, // pixels per second
       stuck: false,
-      stuckTime: 0
+      stuckTime: 0,
+      waiting: false,
+      rerouteCheckTimer: 60
     }
 
     this.cars.set(car.id, car)
@@ -117,5 +119,94 @@ export class TrafficSystem {
   getCurrentEdge(car: CarData): Edge | null {
     if (car.pathIndex >= car.path.length) return null
     return car.path[car.pathIndex]
+  }
+
+  // Get cars ahead of the given car on the same edge
+  getCarsAheadOf(car: CarData): CarData[] {
+    const edge = this.getCurrentEdge(car)
+    if (!edge) return []
+
+    const carsAhead: CarData[] = []
+    for (const otherCar of this.cars.values()) {
+      if (otherCar.id === car.id) continue
+
+      const otherEdge = this.getCurrentEdge(otherCar)
+      if (!otherEdge || otherEdge.id !== edge.id) continue
+
+      // Check if other car is on same edge and ahead
+      // "Ahead" means same direction (same currentNodeId) and higher progress
+      if (otherCar.currentNodeId === car.currentNodeId && otherCar.progress > car.progress) {
+        carsAhead.push(otherCar)
+      }
+    }
+
+    return carsAhead.sort((a, b) => a.progress - b.progress)
+  }
+
+  // Check if there's a car blocking ahead within threshold
+  isBlockedByCarAhead(car: CarData, threshold: number = 0.15): CarData | null {
+    const carsAhead = this.getCarsAheadOf(car)
+    if (carsAhead.length === 0) return null
+
+    const nearestCar = carsAhead[0]
+    const distance = nearestCar.progress - car.progress
+
+    if (distance < threshold && (nearestCar.stuck || nearestCar.waiting)) {
+      return nearestCar
+    }
+
+    // Also stop if very close to any car ahead
+    if (distance < 0.08) {
+      return nearestCar
+    }
+
+    return null
+  }
+
+  // Try to reroute a car if current path is bad
+  tryReroute(car: CarData, snowThreshold: number = 8): boolean {
+    car.rerouteCheckTimer--
+    if (car.rerouteCheckTimer > 0) return false
+    car.rerouteCheckTimer = 60 // Check again in 60 frames (~1 second)
+
+    // Don't reroute if stuck or at start of edge
+    if (car.stuck || car.progress > 0.1) return false
+
+    const currentEdge = this.getCurrentEdge(car)
+    if (!currentEdge) return false
+
+    // Check if current edge is bad
+    const currentEdgeIsBad = currentEdge.snow > snowThreshold || currentEdge.blocked
+
+    if (!currentEdgeIsBad) return false
+
+    // Try to find a better path
+    const newPath = findPath(this.network, car.currentNodeId, car.destinationNodeId)
+    if (!newPath || newPath.length === 0) return false
+
+    // Calculate remaining path cost
+    const remainingPath = car.path.slice(car.pathIndex)
+    const oldCost = this.calculatePathCost(remainingPath)
+    const newCost = this.calculatePathCost(newPath)
+
+    // Only switch if new path is significantly better (at least 20% better)
+    if (newCost < oldCost * 0.8) {
+      car.path = newPath
+      car.pathIndex = 0
+      car.progress = 0
+      return true
+    }
+
+    return false
+  }
+
+  private calculatePathCost(path: Edge[]): number {
+    let cost = 0
+    for (const edge of path) {
+      // Base cost is 1 per edge, plus snow penalty
+      cost += 1 + edge.snow * 0.5
+      if (edge.blocked) cost += 100 // heavily penalize blocked edges
+    }
+    return cost
   }
 }
