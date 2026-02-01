@@ -64,7 +64,7 @@ export class GameScene extends Phaser.Scene {
 
     // Create intersection visuals
     for (const node of this.network.nodes.values()) {
-      const intersection = new Intersection(this, node)
+      const intersection = new Intersection(this, node, this.network)
       this.intersections.set(node.id, intersection)
     }
 
