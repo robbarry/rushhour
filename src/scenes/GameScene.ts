@@ -673,9 +673,10 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Draw plow
+      // Draw plow with snow level for spray effect
       const pos = plow.getPosition(this.network)
-      plow.draw(pos.x, pos.y, pos.angle)
+      const snowLevel = currentEdge ? currentEdge.snow : 0
+      plow.draw(pos.x, pos.y, pos.angle, snowLevel)
     }
 
     // Clean up
