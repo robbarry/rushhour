@@ -2,7 +2,7 @@
 
 import Phaser from 'phaser'
 import { Edge, RoadNetwork, getPositionOnPath } from '../data/RoadNetwork'
-import { DEPTH, PALETTE, DIMENSIONS, TIMING } from '../config/Theme'
+import { DEPTH, PALETTE, DIMENSIONS } from '../config/Theme'
 
 export interface PlowData {
   id: string
@@ -29,26 +29,72 @@ export class Plow {
 
     // Plow body - yellow/orange
     const color = this.data.returning ? PALETTE.PLOW_RETURNING : PALETTE.PLOW_ACTIVE
+    const size = DIMENSIONS.PLOW_SIZE
+    const halfSize = size / 2
+    const bodyHeight = size * 0.66
 
+    // 1. Shadow (drawn first, offset by 2,2)
+    this.graphics.save()
+    this.graphics.translateCanvas(x + 2, y + 2)
+    this.graphics.rotateCanvas(angle)
+    this.graphics.fillStyle(0x000000, 0.4)
+    // Shadow for truck body
+    this.graphics.fillRect(-halfSize, -size / 3, size, bodyHeight)
+    // Shadow for blade
+    this.graphics.fillRect(halfSize, -halfSize - 2, 5, size + 4)
+    this.graphics.restore()
+
+    // 2. Plow blade (curved trapezoid shape at front)
     this.graphics.save()
     this.graphics.translateCanvas(x, y)
     this.graphics.rotateCanvas(angle)
-
-    // Truck body
-    this.graphics.fillStyle(color, 1)
-    this.graphics.fillRect(-DIMENSIONS.PLOW_SIZE / 2, -DIMENSIONS.PLOW_SIZE / 3, DIMENSIONS.PLOW_SIZE, DIMENSIONS.PLOW_SIZE * 0.66)
-
-    // Plow blade (front)
-    this.graphics.fillStyle(PALETTE.PLOW_BLADE, 1)
-    this.graphics.fillRect(DIMENSIONS.PLOW_SIZE / 2 - 2, -DIMENSIONS.PLOW_SIZE / 2, 4, DIMENSIONS.PLOW_SIZE)
-
+    // Metallic gray blade - 0x94a3b8
+    this.graphics.fillStyle(0x94a3b8, 1)
+    // Draw a curved blade using arc
+    const bladeX = halfSize
+    const bladeWidth = 5
+    // Trapezoid blade shape: wider at the cutting edge
+    this.graphics.beginPath()
+    this.graphics.moveTo(bladeX, -halfSize - 2)
+    this.graphics.lineTo(bladeX + bladeWidth + 2, -halfSize - 4)  // Top outer (wider)
+    this.graphics.lineTo(bladeX + bladeWidth + 2, halfSize + 4)   // Bottom outer (wider)
+    this.graphics.lineTo(bladeX, halfSize + 2)
+    this.graphics.closePath()
+    this.graphics.fillPath()
+    // Add a curved edge highlight
+    this.graphics.lineStyle(1.5, 0xb0c4de, 0.8)
+    this.graphics.beginPath()
+    this.graphics.arc(bladeX + bladeWidth + 2, 0, halfSize + 3, -Math.PI / 2, Math.PI / 2, false)
+    this.graphics.strokePath()
     this.graphics.restore()
 
-    // Flashing light
-    if (Math.floor(Date.now() / TIMING.PLOW_FLASH) % 2 === 0) {
-      this.graphics.fillStyle(PALETTE.PLOW_FLASH, 1)
-      this.graphics.fillCircle(x, y - DIMENSIONS.WARNING_LIGHT_OFFSET, DIMENSIONS.WARNING_LIGHT_RADIUS)
-    }
+    // 3. Truck body
+    this.graphics.save()
+    this.graphics.translateCanvas(x, y)
+    this.graphics.rotateCanvas(angle)
+    this.graphics.fillStyle(color, 1)
+    this.graphics.fillRect(-halfSize, -size / 3, size, bodyHeight)
+    this.graphics.restore()
+
+    // 4. Rotating amber beacon on top
+    const time = Date.now()
+    const beaconRotation = (time / 100) % (Math.PI * 2)  // Full rotation every ~628ms
+    const beaconY = y - DIMENSIONS.WARNING_LIGHT_OFFSET
+    const beaconRadius = DIMENSIONS.WARNING_LIGHT_RADIUS
+
+    // Beacon base (darker amber)
+    this.graphics.fillStyle(0xd97706, 1)
+    this.graphics.fillCircle(x, beaconY, beaconRadius)
+
+    // Rotating glow effect - bright spot that sweeps around
+    const glowOffsetX = Math.cos(beaconRotation) * (beaconRadius * 0.5)
+    const glowOffsetY = Math.sin(beaconRotation) * (beaconRadius * 0.5)
+    this.graphics.fillStyle(PALETTE.WARNING_AMBER, 1)
+    this.graphics.fillCircle(x + glowOffsetX, beaconY + glowOffsetY, beaconRadius * 0.6)
+
+    // Bright center highlight
+    this.graphics.fillStyle(0xfcd34d, 0.9)
+    this.graphics.fillCircle(x, beaconY, beaconRadius * 0.3)
   }
 
   getPosition(network: RoadNetwork): { x: number, y: number, angle: number } {
