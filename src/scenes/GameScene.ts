@@ -76,8 +76,41 @@ export class GameScene extends Phaser.Scene {
     // Create snow particles
     this.createSnowParticles()
 
+    // Create ambient effects (vignette and bloom)
+    this.createAmbientEffects()
+
     // Create HUD
     this.createHUD()
+  }
+
+  private createAmbientEffects(): void {
+    // Create vignette overlay - radial gradient from transparent center to dark edges
+    const vignetteGraphics = this.add.graphics()
+    vignetteGraphics.setDepth(DEPTH.VIGNETTE)
+
+    const centerX = DIMENSIONS.GAME_WIDTH / 2
+    const centerY = DIMENSIONS.GAME_HEIGHT / 2
+    const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY)
+
+    // Draw concentric rings from outer edge inward with decreasing alpha
+    // This creates a radial gradient effect
+    const steps = 50
+    for (let i = 0; i < steps; i++) {
+      const ratio = i / steps
+      const radius = maxRadius * (1 - ratio)
+      // Alpha decreases from edge (0.5) to center (0)
+      // Using a quadratic falloff for smoother transition
+      const alpha = 0.5 * ratio * ratio
+
+      vignetteGraphics.fillStyle(0x000000, alpha)
+      vignetteGraphics.fillCircle(centerX, centerY, radius)
+    }
+
+    // Add bloom post-processing effect on camera for snow glow
+    // Phaser 3.60+ supports PostFX pipeline
+    if (this.cameras.main.postFX) {
+      this.cameras.main.postFX.addBloom(0xffffff, 1, 1, 0.5, 1.2)
+    }
   }
 
   private createHUD(): void {

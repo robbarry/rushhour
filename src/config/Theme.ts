@@ -3,7 +3,7 @@
 
 // Depth layers for rendering order
 // Background (0), Roads/Intersections (1-2), Tire tracks/decals (3),
-// Shadows (4), Vehicles (5-10), Particles (50), UI (100)
+// Shadows (4), Vehicles (5-10), Particles (50), Vignette (75), UI (100)
 export const DEPTH = {
   BACKGROUND: 0,
   ROAD: 1,
@@ -15,6 +15,7 @@ export const DEPTH = {
   PLOW: 7,
   TOW_TRUCK: 8,
   PARTICLES: 50,
+  VIGNETTE: 75,
   UI: 100
 } as const
 
