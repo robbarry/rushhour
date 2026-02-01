@@ -16,16 +16,61 @@ export interface PlowData {
 
 export class Plow {
   private graphics: Phaser.GameObjects.Graphics
+  private scene: Phaser.Scene
+  private sprayEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null
+  private lastX: number = 0
+  private lastY: number = 0
+  private isMoving: boolean = false
   public data: PlowData
 
   constructor(scene: Phaser.Scene, data: PlowData) {
     this.data = data
+    this.scene = scene
     this.graphics = scene.add.graphics()
     this.graphics.setDepth(DEPTH.PLOW)
+
+    // Create snow spray particle emitter
+    this.createSprayEmitter()
   }
 
-  draw(x: number, y: number, angle: number): void {
+  private createSprayEmitter(): void {
+    // Generate spray particle texture if not already created
+    const textureKey = 'plow_spray'
+    if (!this.scene.textures.exists(textureKey)) {
+      const graphics = this.scene.add.graphics()
+      // Small white triangle particle
+      graphics.fillStyle(PALETTE.SNOW_FRESH, 1)
+      graphics.fillTriangle(0, 4, 4, 4, 2, 0)
+      graphics.generateTexture(textureKey, 5, 5)
+      graphics.destroy()
+    }
+
+    // Create particle emitter for snow spray
+    this.sprayEmitter = this.scene.add.particles(0, 0, textureKey, {
+      lifespan: { min: 200, max: 400 },
+      speed: { min: 40, max: 80 },
+      angle: { min: -60, max: -30 }, // Angled spray (will be rotated based on plow direction)
+      scale: { start: 0.8, end: 0.2 },
+      alpha: { start: 0.9, end: 0 },
+      gravityY: 50,
+      frequency: -1, // Manual emission
+      emitting: false
+    })
+    this.sprayEmitter.setDepth(DEPTH.PLOW - 1)
+  }
+
+  draw(x: number, y: number, angle: number, snowLevel: number = 0): void {
     this.graphics.clear()
+
+    // Check if plow is moving (position changed from last frame)
+    const dx = x - this.lastX
+    const dy = y - this.lastY
+    this.isMoving = Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1
+    this.lastX = x
+    this.lastY = y
+
+    // Update spray effect based on movement and snow level
+    this.updateSpray(x, y, angle, snowLevel)
 
     // Plow body - yellow/orange
     const color = this.data.returning ? PALETTE.PLOW_RETURNING : PALETTE.PLOW_ACTIVE
@@ -97,6 +142,36 @@ export class Plow {
     this.graphics.fillCircle(x, beaconY, beaconRadius * 0.3)
   }
 
+  private updateSpray(x: number, y: number, angle: number, snowLevel: number): void {
+    if (!this.sprayEmitter) return
+
+    // Only spray when moving AND there's snow to clear
+    if (this.isMoving && snowLevel > 0) {
+      // Position spray at the blade (front-right of plow)
+      const size = DIMENSIONS.PLOW_SIZE
+      const bladeOffset = size / 2 + 5
+
+      // Calculate blade position (spray comes off the right side of the blade)
+      // The blade is at the front of the plow, spray goes to the side
+      const sprayAngle = angle + Math.PI / 2 // 90 degrees to the right of travel direction
+      const bladeX = x + Math.cos(angle) * bladeOffset
+      const bladeY = y + Math.sin(angle) * bladeOffset
+
+      // Position emitter at blade
+      this.sprayEmitter.setPosition(bladeX, bladeY)
+
+      // Set particle emission angle based on plow direction
+      // Particles spray off at an angle from the direction of travel
+      const angleDeg = Phaser.Math.RadToDeg(sprayAngle)
+      this.sprayEmitter.particleAngle = { min: angleDeg - 30, max: angleDeg + 15 }
+
+      // Emit particles based on snow level (more snow = more spray)
+      // Snow levels: 0-2 clear, 2-5 light, 5-8 moderate, 9+ deep
+      const particleCount = Math.min(Math.ceil(snowLevel / 2), 4)
+      this.sprayEmitter.emitParticle(particleCount)
+    }
+  }
+
   getPosition(network: RoadNetwork): { x: number, y: number, angle: number } {
     return getPositionOnPath(
       network,
@@ -114,5 +189,9 @@ export class Plow {
 
   destroy(): void {
     this.graphics.destroy()
+    if (this.sprayEmitter) {
+      this.sprayEmitter.destroy()
+      this.sprayEmitter = null
+    }
   }
 }
