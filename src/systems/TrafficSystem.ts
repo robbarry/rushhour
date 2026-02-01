@@ -121,43 +121,56 @@ export class TrafficSystem {
     return car.path[car.pathIndex]
   }
 
-  // Get cars ahead of the given car on the same edge
-  getCarsAheadOf(car: CarData): CarData[] {
+  // Get all cars on the same edge that would block this car
+  getCarsBlockingOn(car: CarData): { car: CarData, distance: number }[] {
     const edge = this.getCurrentEdge(car)
     if (!edge) return []
 
-    const carsAhead: CarData[] = []
+    const blocking: { car: CarData, distance: number }[] = []
+
     for (const otherCar of this.cars.values()) {
       if (otherCar.id === car.id) continue
 
       const otherEdge = this.getCurrentEdge(otherCar)
       if (!otherEdge || otherEdge.id !== edge.id) continue
 
-      // Check if other car is on same edge and ahead
-      // "Ahead" means same direction (same currentNodeId) and higher progress
-      if (otherCar.currentNodeId === car.currentNodeId && otherCar.progress > car.progress) {
-        carsAhead.push(otherCar)
+      // Calculate position along edge from car's perspective
+      let otherPosition: number
+      if (otherCar.currentNodeId === car.currentNodeId) {
+        // Same direction - their progress is directly comparable
+        otherPosition = otherCar.progress
+      } else {
+        // Opposite direction - flip their progress
+        otherPosition = 1 - otherCar.progress
+      }
+
+      // Check if other car is ahead of us (higher position from our perspective)
+      if (otherPosition > car.progress) {
+        blocking.push({
+          car: otherCar,
+          distance: otherPosition - car.progress
+        })
       }
     }
 
-    return carsAhead.sort((a, b) => a.progress - b.progress)
+    return blocking.sort((a, b) => a.distance - b.distance)
   }
 
   // Check if there's a car blocking ahead within threshold
-  isBlockedByCarAhead(car: CarData, threshold: number = 0.15): CarData | null {
-    const carsAhead = this.getCarsAheadOf(car)
-    if (carsAhead.length === 0) return null
+  isBlockedByCarAhead(car: CarData, threshold: number = 0.12): CarData | null {
+    const blocking = this.getCarsBlockingOn(car)
+    if (blocking.length === 0) return null
 
-    const nearestCar = carsAhead[0]
-    const distance = nearestCar.progress - car.progress
+    const nearest = blocking[0]
 
-    if (distance < threshold && (nearestCar.stuck || nearestCar.waiting)) {
-      return nearestCar
+    // Stop if close to a stuck or waiting car
+    if (nearest.distance < threshold && (nearest.car.stuck || nearest.car.waiting)) {
+      return nearest.car
     }
 
-    // Also stop if very close to any car ahead
-    if (distance < 0.08) {
-      return nearestCar
+    // Stop if very close to ANY car to prevent overlap
+    if (nearest.distance < 0.10) {
+      return nearest.car
     }
 
     return null
