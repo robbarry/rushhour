@@ -26,7 +26,7 @@ export class GameScene extends Phaser.Scene {
   private nextPlowId: number = 0
   private nextTowTruckId: number = 0
 
-  private snowParticles!: Phaser.GameObjects.Particles.ParticleEmitter
+  private snowParticles: Phaser.GameObjects.Particles.ParticleEmitter[] = []
   private scoreText!: Phaser.GameObjects.Text
   private stormText!: Phaser.GameObjects.Text
   private plowStatusText!: Phaser.GameObjects.Text
@@ -97,25 +97,81 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createSnowParticles(): void {
-    // Create a simple white particle texture
-    const graphics = this.add.graphics()
-    graphics.fillStyle(PALETTE.SNOW_FRESH, 1)
-    graphics.fillCircle(DIMENSIONS.SNOWFLAKE_RADIUS, DIMENSIONS.SNOWFLAKE_RADIUS, DIMENSIONS.SNOWFLAKE_RADIUS)
-    graphics.generateTexture('snowflake', DIMENSIONS.SNOWFLAKE_SIZE, DIMENSIONS.SNOWFLAKE_SIZE)
-    graphics.destroy()
+    // Create 3 distinct particle textures for depth/parallax effect
+    // Small dot (1px radius) - distant/background layer
+    const graphicsSmall = this.add.graphics()
+    graphicsSmall.fillStyle(PALETTE.SNOW_FRESH, 0.6)
+    graphicsSmall.fillCircle(2, 2, 1)
+    graphicsSmall.generateTexture('snowflake_small', 4, 4)
+    graphicsSmall.destroy()
 
-    this.snowParticles = this.add.particles(0, 0, 'snowflake', {
-      x: { min: 0, max: DIMENSIONS.GAME_WIDTH },
+    // Medium soft circle (3px radius) - mid layer
+    const graphicsMedium = this.add.graphics()
+    graphicsMedium.fillStyle(PALETTE.SNOW_FRESH, 0.8)
+    graphicsMedium.fillCircle(4, 4, 3)
+    graphicsMedium.generateTexture('snowflake_medium', 8, 8)
+    graphicsMedium.destroy()
+
+    // Large blurry circle (6px radius) - foreground layer
+    const graphicsLarge = this.add.graphics()
+    graphicsLarge.fillStyle(PALETTE.SNOW_FRESH, 0.5)
+    graphicsLarge.fillCircle(8, 8, 6)
+    graphicsLarge.generateTexture('snowflake_large', 16, 16)
+    graphicsLarge.destroy()
+
+    // Wind effect constant (positive = blowing right)
+    const windStrength = 10
+
+    // Background layer - small, slow, subtle parallax
+    const emitterSmall = this.add.particles(0, 0, 'snowflake_small', {
+      x: { min: -50, max: DIMENSIONS.GAME_WIDTH + 50 },
       y: -10,
-      lifespan: 8000,
-      speedY: { min: 20, max: 40 },
-      speedX: { min: -10, max: 10 },
-      scale: { start: 0.3, end: 0.1 },
-      alpha: { start: 0.8, end: 0.2 },
-      frequency: 100,
+      lifespan: { min: 10000, max: 14000 },
+      speedY: { min: 15, max: 25 },
+      speedX: { min: -5, max: 5 },
+      gravityX: windStrength * 0.5,
+      scale: { start: 0.8, end: 0.4 },
+      alpha: { start: 0.4, end: 0.1 },
+      frequency: 80,
+      quantity: 2
+    })
+    emitterSmall.setDepth(DEPTH.PARTICLES - 2)
+    emitterSmall.setScrollFactor(0.3)
+    this.snowParticles.push(emitterSmall)
+
+    // Mid layer - medium size, moderate speed
+    const emitterMedium = this.add.particles(0, 0, 'snowflake_medium', {
+      x: { min: -30, max: DIMENSIONS.GAME_WIDTH + 30 },
+      y: -10,
+      lifespan: { min: 7000, max: 10000 },
+      speedY: { min: 30, max: 50 },
+      speedX: { min: -8, max: 8 },
+      gravityX: windStrength,
+      scale: { start: 0.6, end: 0.3 },
+      alpha: { start: 0.6, end: 0.2 },
+      frequency: 120,
       quantity: 1
     })
-    this.snowParticles.setDepth(DEPTH.PARTICLES)
+    emitterMedium.setDepth(DEPTH.PARTICLES)
+    emitterMedium.setScrollFactor(0.6)
+    this.snowParticles.push(emitterMedium)
+
+    // Foreground layer - large, fast, prominent
+    const emitterLarge = this.add.particles(0, 0, 'snowflake_large', {
+      x: { min: -20, max: DIMENSIONS.GAME_WIDTH + 20 },
+      y: -20,
+      lifespan: { min: 4000, max: 6000 },
+      speedY: { min: 50, max: 80 },
+      speedX: { min: -15, max: 15 },
+      gravityX: windStrength * 1.5,
+      scale: { start: 0.5, end: 0.2 },
+      alpha: { start: 0.7, end: 0.1 },
+      frequency: 200,
+      quantity: 1
+    })
+    emitterLarge.setDepth(DEPTH.PARTICLES + 2)
+    emitterLarge.setScrollFactor(1.0)
+    this.snowParticles.push(emitterLarge)
   }
 
   private dispatchPlow(targetEdge: Edge): void {
