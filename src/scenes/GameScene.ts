@@ -10,6 +10,7 @@ import { Intersection } from '../entities/Intersection'
 import { Car } from '../entities/Car'
 import { Plow, PlowData } from '../entities/Plow'
 import { TowTruck, TowTruckData } from '../entities/TowTruck'
+import { DEPTH, PALETTE, DIMENSIONS, TIMING, SPEEDS } from '../config/Theme'
 
 export class GameScene extends Phaser.Scene {
   private network!: RoadNetwork
@@ -32,7 +33,6 @@ export class GameScene extends Phaser.Scene {
 
   // Plow cooldown
   private plowCooldown: number = 0
-  private readonly PLOW_COOLDOWN_TIME: number = 2000 // 2 seconds
 
   // Score tracking
   private score: number = 0
@@ -73,39 +73,39 @@ export class GameScene extends Phaser.Scene {
     this.add.text(10, 10, 'Rush Hour Snow', {
       fontSize: '24px',
       color: '#ffffff'
-    }).setDepth(100)
+    }).setDepth(DEPTH.UI)
 
     this.add.text(10, 40, 'Click road to dispatch plow', {
       fontSize: '14px',
       color: '#aaaaaa'
-    }).setDepth(100)
+    }).setDepth(DEPTH.UI)
 
     this.scoreText = this.add.text(10, 70, '', {
       fontSize: '16px',
       color: '#00ff00'
-    }).setDepth(100)
+    }).setDepth(DEPTH.UI)
 
     this.stormText = this.add.text(10, 95, '', {
       fontSize: '16px',
       color: '#ffffff'
-    }).setDepth(100)
+    }).setDepth(DEPTH.UI)
 
     this.plowStatusText = this.add.text(10, 120, '', {
       fontSize: '16px',
       color: '#ffff00'
-    }).setDepth(100)
+    }).setDepth(DEPTH.UI)
   }
 
   private createSnowParticles(): void {
     // Create a simple white particle texture
     const graphics = this.add.graphics()
-    graphics.fillStyle(0xffffff, 1)
-    graphics.fillCircle(4, 4, 4)
-    graphics.generateTexture('snowflake', 8, 8)
+    graphics.fillStyle(PALETTE.SNOW_FRESH, 1)
+    graphics.fillCircle(DIMENSIONS.SNOWFLAKE_RADIUS, DIMENSIONS.SNOWFLAKE_RADIUS, DIMENSIONS.SNOWFLAKE_RADIUS)
+    graphics.generateTexture('snowflake', DIMENSIONS.SNOWFLAKE_SIZE, DIMENSIONS.SNOWFLAKE_SIZE)
     graphics.destroy()
 
     this.snowParticles = this.add.particles(0, 0, 'snowflake', {
-      x: { min: 0, max: 800 },
+      x: { min: 0, max: DIMENSIONS.GAME_WIDTH },
       y: -10,
       lifespan: 8000,
       speedY: { min: 20, max: 40 },
@@ -115,7 +115,7 @@ export class GameScene extends Phaser.Scene {
       frequency: 100,
       quantity: 1
     })
-    this.snowParticles.setDepth(50)
+    this.snowParticles.setDepth(DEPTH.PARTICLES)
   }
 
   private dispatchPlow(targetEdge: Edge): void {
@@ -125,10 +125,10 @@ export class GameScene extends Phaser.Scene {
     // Find path from depot to target edge
     // Check both ends of the target edge to see which is closer
     const depotNode = 'depot'
-    
+
     // Path to 'from' node
     const pathA = findPath(this.network, depotNode, targetEdge.from, { ignoreBlocked: true, ignoreSnow: true })
-    
+
     // Path to 'to' node
     const pathB = findPath(this.network, depotNode, targetEdge.to, { ignoreBlocked: true, ignoreSnow: true })
 
@@ -156,7 +156,7 @@ export class GameScene extends Phaser.Scene {
       path: fullPath,
       pathIndex: 0,
       progress: 0,
-      speed: 150,
+      speed: SPEEDS.PLOW,
       returning: false,
       currentNodeId: depotNode
     }
@@ -165,7 +165,7 @@ export class GameScene extends Phaser.Scene {
     this.plows.set(plowData.id, plow)
 
     // Start cooldown
-    this.plowCooldown = this.PLOW_COOLDOWN_TIME
+    this.plowCooldown = TIMING.PLOW_COOLDOWN
   }
 
   private dispatchTowTruck(stuckCar: CarData): void {
@@ -202,7 +202,7 @@ export class GameScene extends Phaser.Scene {
       path: [...pathToCar, carEdge],
       pathIndex: 0,
       progress: 0,
-      speed: 120,
+      speed: SPEEDS.TOW_TRUCK,
       returning: false,
       currentNodeId: 'depot',
       hasCar: false

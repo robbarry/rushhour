@@ -2,12 +2,11 @@
 
 import Phaser from 'phaser'
 import { Node } from '../data/RoadNetwork'
+import { PALETTE, DIMENSIONS } from '../config/Theme'
 
 export class Intersection {
   private graphics: Phaser.GameObjects.Graphics
   public node: Node
-
-  private readonly RADIUS = 16
 
   constructor(scene: Phaser.Scene, node: Node) {
     this.node = node
@@ -17,19 +16,19 @@ export class Intersection {
   }
 
   private draw(): void {
-    const color = this.node.type === 'depot' ? 0x0066cc :
-      this.node.type === 'intersection' ? 0x333333 : 0x555555
+    const color = this.node.type === 'depot' ? PALETTE.DEPOT :
+      this.node.type === 'intersection' ? PALETTE.INTERSECTION : PALETTE.ENDPOINT
 
     this.graphics.fillStyle(color, 1)
-    this.graphics.fillCircle(this.node.x, this.node.y, this.RADIUS)
+    this.graphics.fillCircle(this.node.x, this.node.y, DIMENSIONS.INTERSECTION_RADIUS)
 
     // Draw depot icon
     if (this.node.type === 'depot') {
-      this.graphics.fillStyle(0xffff00, 1)
+      this.graphics.fillStyle(PALETTE.DEPOT_ICON, 1)
       this.graphics.fillTriangle(
         this.node.x, this.node.y - 8,
-        this.node.x - 6, this.node.y + 6,
-        this.node.x + 6, this.node.y + 6
+        this.node.x - DIMENSIONS.DEPOT_ICON_SIZE, this.node.y + 6,
+        this.node.x + DIMENSIONS.DEPOT_ICON_SIZE, this.node.y + 6
       )
     }
   }

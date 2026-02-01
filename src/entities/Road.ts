@@ -3,6 +3,7 @@
 import Phaser from 'phaser'
 import { Edge, Node } from '../data/RoadNetwork'
 import { SNOW_LEVELS } from '../systems/SnowSystem'
+import { DEPTH, PALETTE, DIMENSIONS, SNOW_OVERLAY } from '../config/Theme'
 
 export class Road {
   private graphics: Phaser.GameObjects.Graphics
@@ -13,8 +14,6 @@ export class Road {
   private fromNode: Node
   private toNode: Node
 
-  private readonly ROAD_WIDTH = 24
-
   constructor(scene: Phaser.Scene, edge: Edge, fromNode: Node, toNode: Node) {
     this.edge = edge
     this.fromNode = fromNode
@@ -22,13 +21,15 @@ export class Road {
 
     // Road base
     this.graphics = scene.add.graphics()
+    this.graphics.setDepth(DEPTH.ROAD)
     this.drawRoad()
 
     // Snow overlay
     this.snowOverlay = scene.add.graphics()
+    this.snowOverlay.setDepth(DEPTH.ROAD + 1)
 
     // Create polygon hit area that matches actual road shape
-    const hitWidth = this.ROAD_WIDTH + 10
+    const hitWidth = DIMENSIONS.ROAD_WIDTH + DIMENSIONS.ROAD_HIT_PADDING
     this.hitPolygon = this.calculateRoadPolygon(fromNode, toNode, hitWidth)
 
     // Invisible graphics for hit detection
@@ -43,7 +44,7 @@ export class Road {
 
     this.hitGraphics.on('pointerover', () => {
       this.graphics.clear()
-      this.drawRoad(0x666666)
+      this.drawRoad(PALETTE.ROAD_ASPHALT_HOVER)
     })
 
     this.hitGraphics.on('pointerout', () => {
@@ -67,15 +68,15 @@ export class Road {
     ])
   }
 
-  private drawRoad(color: number = 0x444444): void {
-    this.graphics.lineStyle(this.ROAD_WIDTH, color)
+  private drawRoad(color: number = PALETTE.ROAD_ASPHALT): void {
+    this.graphics.lineStyle(DIMENSIONS.ROAD_WIDTH, color)
     this.graphics.beginPath()
     this.graphics.moveTo(this.fromNode.x, this.fromNode.y)
     this.graphics.lineTo(this.toNode.x, this.toNode.y)
     this.graphics.strokePath()
 
     // Road markings
-    this.graphics.lineStyle(2, 0xffff00, 0.5)
+    this.graphics.lineStyle(DIMENSIONS.ROAD_MARKING_WIDTH, PALETTE.ROAD_MARKING_CENTER, 0.5)
     this.graphics.beginPath()
     this.graphics.moveTo(this.fromNode.x, this.fromNode.y)
     this.graphics.lineTo(this.toNode.x, this.toNode.y)
@@ -90,16 +91,16 @@ export class Road {
     // Calculate opacity based on snow level
     let alpha = 0
     if (this.edge.snow <= SNOW_LEVELS.CLEAR) {
-      alpha = this.edge.snow / SNOW_LEVELS.CLEAR * 0.2
+      alpha = this.edge.snow / SNOW_LEVELS.CLEAR * SNOW_OVERLAY.ALPHA_CLEAR_MAX
     } else if (this.edge.snow <= SNOW_LEVELS.LIGHT) {
-      alpha = 0.2 + (this.edge.snow - SNOW_LEVELS.CLEAR) / (SNOW_LEVELS.LIGHT - SNOW_LEVELS.CLEAR) * 0.2
+      alpha = SNOW_OVERLAY.ALPHA_CLEAR_MAX + (this.edge.snow - SNOW_LEVELS.CLEAR) / (SNOW_LEVELS.LIGHT - SNOW_LEVELS.CLEAR) * (SNOW_OVERLAY.ALPHA_LIGHT_MAX - SNOW_OVERLAY.ALPHA_CLEAR_MAX)
     } else if (this.edge.snow <= SNOW_LEVELS.MODERATE) {
-      alpha = 0.4 + (this.edge.snow - SNOW_LEVELS.LIGHT) / (SNOW_LEVELS.MODERATE - SNOW_LEVELS.LIGHT) * 0.2
+      alpha = SNOW_OVERLAY.ALPHA_LIGHT_MAX + (this.edge.snow - SNOW_LEVELS.LIGHT) / (SNOW_LEVELS.MODERATE - SNOW_LEVELS.LIGHT) * (SNOW_OVERLAY.ALPHA_MODERATE_MAX - SNOW_OVERLAY.ALPHA_LIGHT_MAX)
     } else {
-      alpha = 0.6 + Math.min((this.edge.snow - SNOW_LEVELS.MODERATE) / 5, 0.3)
+      alpha = SNOW_OVERLAY.ALPHA_MODERATE_MAX + Math.min((this.edge.snow - SNOW_LEVELS.MODERATE) / 5, SNOW_OVERLAY.ALPHA_DEEP_MAX - SNOW_OVERLAY.ALPHA_MODERATE_MAX)
     }
 
-    this.snowOverlay.lineStyle(this.ROAD_WIDTH - 4, 0xffffff, alpha)
+    this.snowOverlay.lineStyle(DIMENSIONS.ROAD_WIDTH - SNOW_OVERLAY.ROAD_INNER_REDUCTION, PALETTE.SNOW_FRESH, alpha)
     this.snowOverlay.beginPath()
     this.snowOverlay.moveTo(this.fromNode.x, this.fromNode.y)
     this.snowOverlay.lineTo(this.toNode.x, this.toNode.y)
