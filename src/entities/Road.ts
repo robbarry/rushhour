@@ -26,7 +26,7 @@ export class Road {
 
     // Snow overlay
     this.snowOverlay = scene.add.graphics()
-    this.snowOverlay.setDepth(DEPTH.ROAD + 1)
+    this.snowOverlay.setDepth(DEPTH.ROAD_SNOW)
 
     // Create polygon hit area that matches actual road shape
     const hitWidth = DIMENSIONS.ROAD_WIDTH + DIMENSIONS.ROAD_HIT_PADDING
@@ -34,6 +34,7 @@ export class Road {
 
     // Invisible graphics for hit detection
     this.hitGraphics = scene.add.graphics()
+    this.hitGraphics.setDepth(DEPTH.ROAD_SNOW) // Above road for click detection
     this.hitGraphics.fillStyle(0x000000, 0.001) // Nearly invisible
     this.hitGraphics.fillPoints(this.hitPolygon.points, true)
     this.hitGraphics.setInteractive(this.hitPolygon, Phaser.Geom.Polygon.Contains)

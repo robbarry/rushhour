@@ -2,7 +2,7 @@
 
 import Phaser from 'phaser'
 import { Node } from '../data/RoadNetwork'
-import { PALETTE, DIMENSIONS } from '../config/Theme'
+import { DEPTH, PALETTE, DIMENSIONS } from '../config/Theme'
 
 export class Intersection {
   private graphics: Phaser.GameObjects.Graphics
@@ -12,6 +12,7 @@ export class Intersection {
     this.node = node
 
     this.graphics = scene.add.graphics()
+    this.graphics.setDepth(DEPTH.INTERSECTION)
     this.draw()
   }
 

@@ -2,13 +2,18 @@
 // Cold Night palette and game constants
 
 // Depth layers for rendering order
+// Background (0), Roads/Intersections (1-2), Tire tracks/decals (3),
+// Shadows (4), Vehicles (5-10), Particles (50), UI (100)
 export const DEPTH = {
   BACKGROUND: 0,
   ROAD: 1,
+  ROAD_SNOW: 2,
+  INTERSECTION: 3,
+  TIRE_TRACKS: 4,
   SHADOW: 5,
-  CAR: 10,
-  PLOW: 15,
-  TOW_TRUCK: 15,
+  CAR: 6,
+  PLOW: 7,
+  TOW_TRUCK: 8,
   PARTICLES: 50,
   UI: 100
 } as const
