@@ -5,9 +5,21 @@ import { Edge, Node } from '../data/RoadNetwork'
 import { SNOW_LEVELS } from '../systems/SnowSystem'
 import { DEPTH, PALETTE, DIMENSIONS, SNOW_OVERLAY } from '../config/Theme'
 
+// Snowbank configuration
+const SNOWBANK = {
+  MIN_SPACING: 12,        // Minimum distance between snowbanks at low snow
+  MAX_SPACING: 6,         // Minimum distance at high snow (more frequent)
+  MIN_SIZE: 2,            // Radius at low snow
+  MAX_SIZE: 5,            // Radius at high snow
+  EDGE_OFFSET: 11,        // Distance from road center to snowbank center
+  ALPHA_MIN: 0.3,         // Opacity at low snow
+  ALPHA_MAX: 0.8,         // Opacity at high snow
+} as const
+
 export class Road {
   private graphics: Phaser.GameObjects.Graphics
   private snowOverlay: Phaser.GameObjects.Graphics
+  private snowbankGraphics: Phaser.GameObjects.Graphics
   private hitGraphics: Phaser.GameObjects.Graphics
   private hitPolygon: Phaser.Geom.Polygon
   public edge: Edge
@@ -27,6 +39,10 @@ export class Road {
     // Snow overlay
     this.snowOverlay = scene.add.graphics()
     this.snowOverlay.setDepth(DEPTH.ROAD_SNOW)
+
+    // Snowbank graphics (drawn at same depth as snow overlay)
+    this.snowbankGraphics = scene.add.graphics()
+    this.snowbankGraphics.setDepth(DEPTH.ROAD_SNOW)
 
     // Create polygon hit area that matches actual road shape
     const hitWidth = DIMENSIONS.ROAD_WIDTH + DIMENSIONS.ROAD_HIT_PADDING
@@ -141,6 +157,7 @@ export class Road {
 
   updateSnow(): void {
     this.snowOverlay.clear()
+    this.snowbankGraphics.clear()
 
     if (this.edge.snow <= 0) return
 
@@ -161,11 +178,103 @@ export class Road {
     this.snowOverlay.moveTo(this.fromNode.x, this.fromNode.y)
     this.snowOverlay.lineTo(this.toNode.x, this.toNode.y)
     this.snowOverlay.strokePath()
+
+    // Draw snowbanks along road edges
+    this.drawSnowbanks()
+  }
+
+  private drawSnowbanks(): void {
+    // Calculate snow factor (0 to 1) for scaling snowbank properties
+    const snowFactor = Math.min(this.edge.snow / SNOW_LEVELS.DEEP, 1)
+
+    // Interpolate spacing - more snowbanks as snow increases
+    const spacing = SNOWBANK.MIN_SPACING - (SNOWBANK.MIN_SPACING - SNOWBANK.MAX_SPACING) * snowFactor
+
+    // Interpolate size - larger snowbanks as snow increases
+    const bankSize = SNOWBANK.MIN_SIZE + (SNOWBANK.MAX_SIZE - SNOWBANK.MIN_SIZE) * snowFactor
+
+    // Interpolate alpha
+    const bankAlpha = SNOWBANK.ALPHA_MIN + (SNOWBANK.ALPHA_MAX - SNOWBANK.ALPHA_MIN) * snowFactor
+
+    // Calculate road direction
+    const dx = this.toNode.x - this.fromNode.x
+    const dy = this.toNode.y - this.fromNode.y
+    const length = Math.sqrt(dx * dx + dy * dy)
+    const angle = Math.atan2(dy, dx)
+
+    // Perpendicular offset for edge placement
+    const perpAngle = angle + Math.PI / 2
+    const offsetX = Math.cos(perpAngle) * SNOWBANK.EDGE_OFFSET
+    const offsetY = Math.sin(perpAngle) * SNOWBANK.EDGE_OFFSET
+
+    // Draw snowbanks along both edges, alternating
+    let traveled = spacing / 2 // Start offset from edge
+    let leftSide = true
+
+    while (traveled < length - spacing / 2) {
+      // Position along road
+      const roadX = this.fromNode.x + Math.cos(angle) * traveled
+      const roadY = this.fromNode.y + Math.sin(angle) * traveled
+
+      // Position on edge (alternate sides)
+      const bankX = roadX + (leftSide ? offsetX : -offsetX)
+      const bankY = roadY + (leftSide ? offsetY : -offsetY)
+
+      // Draw semi-circular snowbank shape facing inward
+      this.drawSnowbankShape(bankX, bankY, bankSize, angle, leftSide, bankAlpha)
+
+      traveled += spacing
+      leftSide = !leftSide
+    }
+  }
+
+  private drawSnowbankShape(
+    x: number,
+    y: number,
+    size: number,
+    roadAngle: number,
+    leftSide: boolean,
+    alpha: number
+  ): void {
+    // Draw a semi-circular mound facing toward road center
+    // The flat side faces outward, curved side faces inward
+    const facingAngle = leftSide ? roadAngle - Math.PI / 2 : roadAngle + Math.PI / 2
+
+    // Use packed snow color for snowbanks (slightly grayer than fresh)
+    this.snowbankGraphics.fillStyle(PALETTE.SNOW_PACKED, alpha)
+
+    // Draw semi-circle as a series of points
+    this.snowbankGraphics.beginPath()
+
+    // Start angle and end angle for the arc (semi-circle facing inward)
+    const startAngle = facingAngle - Math.PI / 2
+    const endAngle = facingAngle + Math.PI / 2
+
+    // Move to start of arc
+    this.snowbankGraphics.moveTo(
+      x + Math.cos(startAngle) * size,
+      y + Math.sin(startAngle) * size
+    )
+
+    // Draw arc
+    const segments = 8
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments
+      const a = startAngle + (endAngle - startAngle) * t
+      this.snowbankGraphics.lineTo(
+        x + Math.cos(a) * size,
+        y + Math.sin(a) * size
+      )
+    }
+
+    this.snowbankGraphics.closePath()
+    this.snowbankGraphics.fillPath()
   }
 
   destroy(): void {
     this.graphics.destroy()
     this.snowOverlay.destroy()
+    this.snowbankGraphics.destroy()
     this.hitGraphics.destroy()
   }
 }
