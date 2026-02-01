@@ -27,9 +27,16 @@ export class GameScene extends Phaser.Scene {
   private nextTowTruckId: number = 0
 
   private snowParticles: Phaser.GameObjects.Particles.ParticleEmitter[] = []
-  private scoreText!: Phaser.GameObjects.Text
-  private stormText!: Phaser.GameObjects.Text
+
+  // HUD elements
+  private hudPanel!: Phaser.GameObjects.Graphics
+  private scoreValueText!: Phaser.GameObjects.Text
+  private exitedValueText!: Phaser.GameObjects.Text
+  private rescuedValueText!: Phaser.GameObjects.Text
+  private stuckValueText!: Phaser.GameObjects.Text
+  private stormValueText!: Phaser.GameObjects.Text
   private plowStatusText!: Phaser.GameObjects.Text
+  private hudIcons!: Phaser.GameObjects.Graphics
 
   // Plow cooldown
   private plowCooldown: number = 0
@@ -69,30 +76,78 @@ export class GameScene extends Phaser.Scene {
     // Create snow particles
     this.createSnowParticles()
 
-    // UI text
-    this.add.text(10, 10, 'Rush Hour Snow', {
-      fontSize: '24px',
+    // Create HUD
+    this.createHUD()
+  }
+
+  private createHUD(): void {
+    const panelX = 10
+    const panelY = 10
+    const panelWidth = 280
+    const panelHeight = 180
+    const cornerRadius = 8
+    const padding = 16
+
+    // Panel background
+    this.hudPanel = this.add.graphics()
+    this.hudPanel.setDepth(DEPTH.UI - 1)
+
+    // Draw rounded rectangle background
+    this.hudPanel.fillStyle(0x0f172a, 0.85)
+    this.hudPanel.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, cornerRadius)
+
+    // Draw border
+    this.hudPanel.lineStyle(1, 0x334155, 1)
+    this.hudPanel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, cornerRadius)
+
+    // Icons graphics (will be redrawn in updateHUD)
+    this.hudIcons = this.add.graphics()
+    this.hudIcons.setDepth(DEPTH.UI)
+
+    // Title
+    this.add.text(panelX + padding, panelY + padding, 'TRAFFIC CONTROL', {
+      fontSize: '20px',
+      fontStyle: 'bold',
       color: '#ffffff'
     }).setDepth(DEPTH.UI)
 
-    this.add.text(10, 40, 'Click road to dispatch plow', {
+    // Subtitle
+    this.add.text(panelX + padding, panelY + padding + 24, 'CLICK ROAD TO DISPATCH PLOW', {
+      fontSize: '10px',
+      color: '#64748b'
+    }).setDepth(DEPTH.UI)
+
+    // Stats section - labels and values
+    const statsY = panelY + padding + 50
+    const labelStyle = { fontSize: '10px', color: '#94a3b8' }
+    const valueStyle = { fontSize: '16px', fontFamily: 'monospace', color: '#ffffff' }
+
+    // Row 1: Score and Storm
+    this.add.text(panelX + padding, statsY, 'SCORE', labelStyle).setDepth(DEPTH.UI)
+    this.scoreValueText = this.add.text(panelX + padding + 24, statsY + 12, '0', valueStyle).setDepth(DEPTH.UI)
+
+    this.add.text(panelX + padding + 100, statsY, 'STORM', labelStyle).setDepth(DEPTH.UI)
+    this.stormValueText = this.add.text(panelX + padding + 124, statsY + 12, '--', valueStyle).setDepth(DEPTH.UI)
+
+    // Row 2: Exited, Rescued, Stuck
+    const row2Y = statsY + 40
+    this.add.text(panelX + padding + 24, row2Y, 'EXITED', labelStyle).setDepth(DEPTH.UI)
+    this.exitedValueText = this.add.text(panelX + padding + 24, row2Y + 12, '0', valueStyle).setDepth(DEPTH.UI)
+
+    this.add.text(panelX + padding + 100, row2Y, 'RESCUED', labelStyle).setDepth(DEPTH.UI)
+    this.rescuedValueText = this.add.text(panelX + padding + 100, row2Y + 12, '0', valueStyle).setDepth(DEPTH.UI)
+
+    this.add.text(panelX + padding + 180, row2Y, 'STUCK', labelStyle).setDepth(DEPTH.UI)
+    this.stuckValueText = this.add.text(panelX + padding + 180, row2Y + 12, '0', valueStyle).setDepth(DEPTH.UI)
+
+    // Row 3: Plow status
+    const row3Y = statsY + 80
+    this.add.text(panelX + padding + 24, row3Y, 'PLOW STATUS', labelStyle).setDepth(DEPTH.UI)
+    this.plowStatusText = this.add.text(panelX + padding + 24, row3Y + 12, 'READY', {
       fontSize: '14px',
-      color: '#aaaaaa'
-    }).setDepth(DEPTH.UI)
-
-    this.scoreText = this.add.text(10, 70, '', {
-      fontSize: '16px',
-      color: '#00ff00'
-    }).setDepth(DEPTH.UI)
-
-    this.stormText = this.add.text(10, 95, '', {
-      fontSize: '16px',
-      color: '#ffffff'
-    }).setDepth(DEPTH.UI)
-
-    this.plowStatusText = this.add.text(10, 120, '', {
-      fontSize: '16px',
-      color: '#ffff00'
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      color: '#4ade80'
     }).setDepth(DEPTH.UI)
   }
 
@@ -302,38 +357,141 @@ export class GameScene extends Phaser.Scene {
     // Calculate score: Cars exited (+10), Rescued (+5)
     this.score = this.trafficSystem.stats.exited * 10 + this.trafficSystem.stats.rescued * 5
 
-    // Count clear roads for bonus
-    let clearRoads = 0
-    for (const edge of this.network.edges.values()) {
-      if (edge.id !== 'depot-road' && edge.snow <= 2) {
-        clearRoads++
-      }
-    }
+    // Update score value
+    this.scoreValueText.setText(this.score.toString().padStart(4, '0'))
 
-    this.scoreText.setText(
-      `Score: ${this.score} | Exited: ${this.trafficSystem.stats.exited} | Rescued: ${this.trafficSystem.stats.rescued} | Stuck: ${this.trafficSystem.stuckCount}`
-    )
+    // Update stats
+    this.exitedValueText.setText(this.trafficSystem.stats.exited.toString())
+    this.rescuedValueText.setText(this.trafficSystem.stats.rescued.toString())
+    this.stuckValueText.setText(this.trafficSystem.stuckCount.toString())
 
     // Storm phase indicator with color coding
     const intensity = this.snowSystem.currentIntensity
-    let stormColor = '#aaaaaa'
-    if (intensity >= 2.0) stormColor = '#ff4444'
-    else if (intensity >= 1.5) stormColor = '#ffaa00'
+    let stormColor = '#94a3b8'
+    if (intensity >= 2.0) stormColor = '#f87171'
+    else if (intensity >= 1.5) stormColor = '#fbbf24'
     else if (intensity >= 0.5) stormColor = '#ffffff'
-    else stormColor = '#88ff88'
+    else stormColor = '#4ade80'
 
-    this.stormText.setStyle({ color: stormColor })
-    this.stormText.setText(`Storm: ${this.snowSystem.currentPhaseName}`)
+    this.stormValueText.setStyle({ color: stormColor })
+    this.stormValueText.setText(this.snowSystem.currentPhaseName.toUpperCase())
 
     // Plow status
     if (this.plowCooldown > 0) {
       const remaining = Math.ceil(this.plowCooldown / 1000)
-      this.plowStatusText.setText(`Plow: Ready in ${remaining}s`)
-      this.plowStatusText.setStyle({ color: '#ff8888' })
+      this.plowStatusText.setText(`READY IN ${remaining}s`)
+      this.plowStatusText.setStyle({ color: '#f87171' })
     } else {
-      this.plowStatusText.setText('Plow: READY')
-      this.plowStatusText.setStyle({ color: '#88ff88' })
+      this.plowStatusText.setText('READY')
+      this.plowStatusText.setStyle({ color: '#4ade80' })
     }
+
+    // Draw icons
+    this.drawHUDIcons()
+  }
+
+  private drawHUDIcons(): void {
+    const panelX = 10
+    const panelY = 10
+    const padding = 16
+    const statsY = panelY + padding + 50
+    const row2Y = statsY + 40
+    const row3Y = statsY + 80
+
+    this.hudIcons.clear()
+
+    // Score icon - star shape
+    this.hudIcons.fillStyle(0xfbbf24, 1) // amber
+    this.drawStar(panelX + padding + 8, statsY + 18, 6, 5)
+
+    // Storm icon - cloud
+    this.hudIcons.fillStyle(0x64748b, 1)
+    this.drawCloud(panelX + padding + 108, statsY + 18, 8)
+
+    // Exited icon - arrow pointing right (car leaving)
+    this.hudIcons.fillStyle(0x4ade80, 1) // green
+    this.drawArrowRight(panelX + padding + 8, row2Y + 18, 8)
+
+    // Rescued icon - cross/plus (rescue)
+    this.hudIcons.fillStyle(0x60a5fa, 1) // blue
+    this.drawCross(panelX + padding + 84, row2Y + 18, 6)
+
+    // Stuck icon - warning triangle
+    this.hudIcons.fillStyle(0xf87171, 1) // red
+    this.drawTriangle(panelX + padding + 164, row2Y + 18, 7)
+
+    // Plow icon - triangle/plow blade
+    this.hudIcons.fillStyle(0xfbbf24, 1) // amber
+    this.drawPlowIcon(panelX + padding + 8, row3Y + 18, 8)
+  }
+
+  private drawStar(cx: number, cy: number, radius: number, points: number): void {
+    const innerRadius = radius * 0.4
+    const angle = Math.PI / points
+
+    this.hudIcons.beginPath()
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? radius : innerRadius
+      const a = i * angle - Math.PI / 2
+      const x = cx + r * Math.cos(a)
+      const y = cy + r * Math.sin(a)
+      if (i === 0) {
+        this.hudIcons.moveTo(x, y)
+      } else {
+        this.hudIcons.lineTo(x, y)
+      }
+    }
+    this.hudIcons.closePath()
+    this.hudIcons.fillPath()
+  }
+
+  private drawCloud(cx: number, cy: number, size: number): void {
+    // Simple cloud shape using circles
+    this.hudIcons.fillCircle(cx - size * 0.3, cy, size * 0.4)
+    this.hudIcons.fillCircle(cx + size * 0.3, cy, size * 0.4)
+    this.hudIcons.fillCircle(cx, cy - size * 0.2, size * 0.5)
+    this.hudIcons.fillCircle(cx, cy + size * 0.1, size * 0.35)
+  }
+
+  private drawArrowRight(cx: number, cy: number, size: number): void {
+    this.hudIcons.beginPath()
+    this.hudIcons.moveTo(cx - size * 0.5, cy - size * 0.3)
+    this.hudIcons.lineTo(cx + size * 0.2, cy - size * 0.3)
+    this.hudIcons.lineTo(cx + size * 0.2, cy - size * 0.5)
+    this.hudIcons.lineTo(cx + size * 0.5, cy)
+    this.hudIcons.lineTo(cx + size * 0.2, cy + size * 0.5)
+    this.hudIcons.lineTo(cx + size * 0.2, cy + size * 0.3)
+    this.hudIcons.lineTo(cx - size * 0.5, cy + size * 0.3)
+    this.hudIcons.closePath()
+    this.hudIcons.fillPath()
+  }
+
+  private drawCross(cx: number, cy: number, size: number): void {
+    const thickness = size * 0.35
+    // Horizontal bar
+    this.hudIcons.fillRect(cx - size * 0.5, cy - thickness * 0.5, size, thickness)
+    // Vertical bar
+    this.hudIcons.fillRect(cx - thickness * 0.5, cy - size * 0.5, thickness, size)
+  }
+
+  private drawTriangle(cx: number, cy: number, size: number): void {
+    this.hudIcons.beginPath()
+    this.hudIcons.moveTo(cx, cy - size * 0.6)
+    this.hudIcons.lineTo(cx + size * 0.5, cy + size * 0.4)
+    this.hudIcons.lineTo(cx - size * 0.5, cy + size * 0.4)
+    this.hudIcons.closePath()
+    this.hudIcons.fillPath()
+  }
+
+  private drawPlowIcon(cx: number, cy: number, size: number): void {
+    // Plow blade shape - angled blade
+    this.hudIcons.beginPath()
+    this.hudIcons.moveTo(cx - size * 0.5, cy + size * 0.3)
+    this.hudIcons.lineTo(cx + size * 0.5, cy - size * 0.3)
+    this.hudIcons.lineTo(cx + size * 0.5, cy + size * 0.1)
+    this.hudIcons.lineTo(cx - size * 0.3, cy + size * 0.5)
+    this.hudIcons.closePath()
+    this.hudIcons.fillPath()
   }
 
   private updateCars(delta: number): void {
