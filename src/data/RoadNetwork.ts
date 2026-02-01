@@ -87,3 +87,54 @@ export function getEdgeBetween(network: RoadNetwork, nodeA: string, nodeB: strin
   }
   return undefined
 }
+
+export function getPositionOnPath(
+  network: RoadNetwork,
+  path: Edge[],
+  pathIndex: number,
+  progress: number,
+  currentStartNodeId?: string
+): { x: number, y: number, angle: number } {
+  if (pathIndex >= path.length) {
+    // End of path - return position of the last node of the last edge
+    // We need to know which end was the "end".
+    // If we have currentStartNodeId, we can infer.
+    // Otherwise, assume the "to" node of the last edge if it was the last step.
+    // But safely, let's just return the node associated with currentStartNodeId if provided,
+    // or just the 'to' of the last edge (risky if traversed backwards).
+    
+    // Fallback: if we are done, we are at the destination node.
+    // But we don't have the destination node ID passed here explicitly unless we infer it.
+    // Let's rely on the caller to handle "arrived" state, but provide a safe fallback.
+    const lastEdge = path[path.length - 1]
+    const node = network.nodes.get(lastEdge.to)!
+    return { x: node.x, y: node.y, angle: 0 }
+  }
+
+  const edge = path[pathIndex]
+  let fromNodeId: string
+  let toNodeId: string
+
+  if (pathIndex === 0) {
+    // First edge. We need currentStartNodeId to know direction.
+    // If not provided, we default to edge.from (arbitrary).
+    fromNodeId = currentStartNodeId || edge.from
+    toNodeId = getOtherNode(edge, fromNodeId)
+  } else {
+    // Infer direction from previous edge
+    const prevEdge = path[pathIndex - 1]
+    // The shared node is the "start" of the current edge
+    fromNodeId = edge.from === prevEdge.from || edge.from === prevEdge.to
+      ? edge.from : edge.to
+    toNodeId = getOtherNode(edge, fromNodeId)
+  }
+
+  const fromNode = network.nodes.get(fromNodeId)!
+  const toNode = network.nodes.get(toNodeId)!
+
+  const x = fromNode.x + (toNode.x - fromNode.x) * progress
+  const y = fromNode.y + (toNode.y - fromNode.y) * progress
+  const angle = Math.atan2(toNode.y - fromNode.y, toNode.x - fromNode.x)
+
+  return { x, y, angle }
+}

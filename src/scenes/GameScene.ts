@@ -26,6 +26,7 @@ export class GameScene extends Phaser.Scene {
   private nextTowTruckId: number = 0
 
   private snowParticles!: Phaser.GameObjects.Particles.ParticleEmitter
+  private scoreText!: Phaser.GameObjects.Text
 
   constructor() {
     super({ key: 'GameScene' })
@@ -79,6 +80,11 @@ export class GameScene extends Phaser.Scene {
       fontSize: '14px',
       color: '#aaaaaa'
     }).setDepth(100)
+
+    this.scoreText = this.add.text(10, 70, '', {
+      fontSize: '16px',
+      color: '#00ff00'
+    }).setDepth(100)
   }
 
   private createSnowParticles(): void {
@@ -105,10 +111,29 @@ export class GameScene extends Phaser.Scene {
 
   private dispatchPlow(targetEdge: Edge): void {
     // Find path from depot to target edge
+    // Check both ends of the target edge to see which is closer
     const depotNode = 'depot'
-    const targetNode = targetEdge.from // Go to one end of the target road
+    
+    // Path to 'from' node
+    const pathA = findPath(this.network, depotNode, targetEdge.from, { ignoreBlocked: true, ignoreSnow: true })
+    
+    // Path to 'to' node
+    const pathB = findPath(this.network, depotNode, targetEdge.to, { ignoreBlocked: true, ignoreSnow: true })
 
-    const pathToTarget = findPath(this.network, depotNode, targetNode, true)
+    let pathToTarget: Edge[] | null = null
+
+    if (pathA && pathB) {
+      if (pathA.length <= pathB.length) {
+        pathToTarget = pathA
+      } else {
+        pathToTarget = pathB
+      }
+    } else if (pathA) {
+      pathToTarget = pathA
+    } else if (pathB) {
+      pathToTarget = pathB
+    }
+
     if (!pathToTarget) return
 
     // Add the target edge to the path
@@ -139,7 +164,21 @@ export class GameScene extends Phaser.Scene {
     if (!carEdge) return
 
     // Path from depot to the stuck car's location
-    const pathToCar = findPath(this.network, 'depot', carEdge.from, true)
+    // Find closest end to the car's edge
+    const depotNode = 'depot'
+    const pathA = findPath(this.network, depotNode, carEdge.from, { ignoreBlocked: true, ignoreSnow: true })
+    const pathB = findPath(this.network, depotNode, carEdge.to, { ignoreBlocked: true, ignoreSnow: true })
+
+    let pathToCar: Edge[] | null = null
+
+    if (pathA && pathB) {
+      pathToCar = pathA.length <= pathB.length ? pathA : pathB
+    } else if (pathA) {
+      pathToCar = pathA
+    } else if (pathB) {
+      pathToCar = pathB
+    }
+
     if (!pathToCar) return
 
     const towData: TowTruckData = {
@@ -178,6 +217,11 @@ export class GameScene extends Phaser.Scene {
 
     // Update tow trucks
     this.updateTowTrucks(delta)
+
+    // Update score UI
+    this.scoreText.setText(
+      `Exited: ${this.trafficSystem.stats.exited} | Rescued: ${this.trafficSystem.stats.rescued} | Stuck: ${this.trafficSystem.stuckCount}`
+    )
   }
 
   private updateCars(delta: number): void {
@@ -206,7 +250,7 @@ export class GameScene extends Phaser.Scene {
 
       if (!currentEdge) {
         // Car reached destination - remove it
-        this.trafficSystem.removeCar(carData.id)
+        this.trafficSystem.removeCar(carData.id, 'exited')
         continue
       }
 
@@ -294,8 +338,8 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Clear snow while moving (if not returning)
-      if (!data.returning && currentEdge) {
+      // Clear snow while moving
+      if (currentEdge) {
         this.snowSystem.clearSnow(currentEdge.id, 15 * deltaSeconds)
       }
 
@@ -363,7 +407,7 @@ export class GameScene extends Phaser.Scene {
         } else if (!data.hasCar && targetCar) {
           // Reached the car, pick it up
           data.hasCar = true
-          this.trafficSystem.removeCar(data.targetCarId)
+          this.trafficSystem.removeCar(data.targetCarId, 'rescued')
 
           // Return to depot
           data.returning = true

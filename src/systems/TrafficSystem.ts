@@ -1,6 +1,6 @@
 // Traffic spawning and routing system
 
-import { RoadNetwork, Node } from '../data/RoadNetwork'
+import { RoadNetwork, getPositionOnPath } from '../data/RoadNetwork'
 import { findPath } from './PathFinding'
 import { Edge } from '../data/RoadNetwork'
 
@@ -22,6 +22,13 @@ export class TrafficSystem {
   private nextCarId: number = 0
   private spawnTimer: number = 0
   private spawnInterval: number = 3000 // ms between spawns
+
+  // Stats
+  public stats = {
+    exited: 0,
+    rescued: 0,
+    stuck: 0
+  }
 
   // Endpoints where cars can spawn/despawn
   private endpoints: string[] = [
@@ -72,8 +79,20 @@ export class TrafficSystem {
     return Array.from(this.cars.values())
   }
 
-  removeCar(carId: string): void {
-    this.cars.delete(carId)
+  get stuckCount(): number {
+    let count = 0
+    for (const car of this.cars.values()) {
+      if (car.stuck) count++
+    }
+    return count
+  }
+
+  removeCar(carId: string, reason: 'exited' | 'rescued'): void {
+    if (this.cars.has(carId)) {
+      this.cars.delete(carId)
+      if (reason === 'exited') this.stats.exited++
+      if (reason === 'rescued') this.stats.rescued++
+    }
   }
 
   setCarStuck(carId: string, stuck: boolean): void {
@@ -85,37 +104,14 @@ export class TrafficSystem {
   }
 
   getCarPosition(car: CarData): { x: number, y: number } {
-    if (car.pathIndex >= car.path.length) {
-      const node = this.network.nodes.get(car.destinationNodeId)!
-      return { x: node.x, y: node.y }
-    }
-
-    const edge = car.path[car.pathIndex]
-
-    // Determine direction along edge
-    let startNode: Node
-    let endNode: Node
-
-    if (car.pathIndex === 0) {
-      startNode = this.network.nodes.get(car.currentNodeId)!
-      endNode = this.network.nodes.get(
-        edge.from === car.currentNodeId ? edge.to : edge.from
-      )!
-    } else {
-      // Figure out direction based on previous position
-      const prevEdge = car.path[car.pathIndex - 1]
-      const prevEndNode = edge.from === prevEdge.from || edge.from === prevEdge.to
-        ? edge.from : edge.to
-      startNode = this.network.nodes.get(prevEndNode)!
-      endNode = this.network.nodes.get(
-        edge.from === prevEndNode ? edge.to : edge.from
-      )!
-    }
-
-    return {
-      x: startNode.x + (endNode.x - startNode.x) * car.progress,
-      y: startNode.y + (endNode.y - startNode.y) * car.progress
-    }
+    const pos = getPositionOnPath(
+      this.network,
+      car.path,
+      car.pathIndex,
+      car.progress,
+      car.currentNodeId
+    )
+    return { x: pos.x, y: pos.y }
   }
 
   getCurrentEdge(car: CarData): Edge | null {

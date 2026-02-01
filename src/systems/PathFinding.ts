@@ -11,16 +11,26 @@ interface PathNode {
   edge: Edge | null // Edge used to reach this node
 }
 
+export interface PathOptions {
+  ignoreBlocked?: boolean
+  ignoreSnow?: boolean
+}
+
 export function findPath(
   network: RoadNetwork,
   startNodeId: string,
   goalNodeId: string,
-  ignoreBlocked: boolean = false
+  options: PathOptions | boolean = false // Backwards compatibility for boolean
 ): Edge[] | null {
   const start = network.nodes.get(startNodeId)
   const goal = network.nodes.get(goalNodeId)
 
   if (!start || !goal) return null
+
+  // Handle legacy boolean argument
+  const opts: PathOptions = typeof options === 'boolean' 
+    ? { ignoreBlocked: options } 
+    : options
 
   const openSet = new Map<string, PathNode>()
   const closedSet = new Set<string>()
@@ -61,7 +71,7 @@ export function findPath(
       const edge = network.edges.get(edgeId)!
 
       // Skip blocked edges unless we're ignoring them
-      if (edge.blocked && !ignoreBlocked) continue
+      if (edge.blocked && !opts.ignoreBlocked) continue
 
       const neighborId = getOtherNode(edge, current.nodeId)
       if (closedSet.has(neighborId)) continue
@@ -69,13 +79,17 @@ export function findPath(
       const neighbor = network.nodes.get(neighborId)!
 
       // Cost includes snow level (slows down travel)
-      const snowPenalty = Math.min(edge.snow * 0.5, 5)
+      let snowPenalty = 0
+      if (!opts.ignoreSnow) {
+        snowPenalty = Math.min(edge.snow * 0.5, 5) * 10
+      }
+
       const edgeCost = distance(
         network.nodes.get(current.nodeId)!.x,
         network.nodes.get(current.nodeId)!.y,
         neighbor.x,
         neighbor.y
-      ) + snowPenalty * 10
+      ) + snowPenalty
 
       const tentativeG = current.g + edgeCost
 
@@ -112,7 +126,8 @@ function reconstructPath(node: PathNode): Edge[] {
 }
 
 function heuristic(x1: number, y1: number, x2: number, y2: number): number {
-  return Math.abs(x2 - x1) + Math.abs(y2 - y1)
+  // Use Euclidean distance to match cost function and be admissible
+  return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 }
 
 function distance(x1: number, y1: number, x2: number, y2: number): number {

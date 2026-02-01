@@ -1,7 +1,7 @@
 // Snow plow entity
 
 import Phaser from 'phaser'
-import { Edge, RoadNetwork, getOtherNode } from '../data/RoadNetwork'
+import { Edge, RoadNetwork, getPositionOnPath } from '../data/RoadNetwork'
 
 export interface PlowData {
   id: string
@@ -40,10 +40,8 @@ export class Plow {
     this.graphics.fillRect(-this.SIZE / 2, -this.SIZE / 3, this.SIZE, this.SIZE * 0.66)
 
     // Plow blade (front)
-    if (!this.data.returning) {
-      this.graphics.fillStyle(0x888888, 1)
-      this.graphics.fillRect(this.SIZE / 2 - 2, -this.SIZE / 2, 4, this.SIZE)
-    }
+    this.graphics.fillStyle(0x888888, 1)
+    this.graphics.fillRect(this.SIZE / 2 - 2, -this.SIZE / 2, 4, this.SIZE)
 
     this.graphics.restore()
 
@@ -55,36 +53,13 @@ export class Plow {
   }
 
   getPosition(network: RoadNetwork): { x: number, y: number, angle: number } {
-    if (this.data.pathIndex >= this.data.path.length) {
-      const node = network.nodes.get(this.data.currentNodeId)!
-      return { x: node.x, y: node.y, angle: 0 }
-    }
-
-    const edge = this.data.path[this.data.pathIndex]
-
-    // Determine direction
-    let fromNodeId: string
-    let toNodeId: string
-
-    if (this.data.pathIndex === 0) {
-      fromNodeId = this.data.currentNodeId
-      toNodeId = getOtherNode(edge, fromNodeId)
-    } else {
-      const prevEdge = this.data.path[this.data.pathIndex - 1]
-      // The "to" node of the previous edge is the "from" node of current
-      fromNodeId = edge.from === prevEdge.from || edge.from === prevEdge.to
-        ? edge.from : edge.to
-      toNodeId = getOtherNode(edge, fromNodeId)
-    }
-
-    const fromNode = network.nodes.get(fromNodeId)!
-    const toNode = network.nodes.get(toNodeId)!
-
-    const x = fromNode.x + (toNode.x - fromNode.x) * this.data.progress
-    const y = fromNode.y + (toNode.y - fromNode.y) * this.data.progress
-    const angle = Math.atan2(toNode.y - fromNode.y, toNode.x - fromNode.x)
-
-    return { x, y, angle }
+    return getPositionOnPath(
+      network,
+      this.data.path,
+      this.data.pathIndex,
+      this.data.progress,
+      this.data.currentNodeId
+    )
   }
 
   getCurrentEdge(): Edge | null {
