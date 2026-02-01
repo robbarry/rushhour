@@ -572,9 +572,7 @@ export class GameScene extends Phaser.Scene {
         carData.waiting = false
         // Still update position for rendering
         const pos = this.trafficSystem.getCarPosition(carData)
-        const nextPos = this.getNextPosition(carData)
-        const angle = Math.atan2(nextPos.y - pos.y, nextPos.x - pos.x)
-        car.draw(pos.x, pos.y, angle)
+        car.draw(pos.x, pos.y, pos.angle)
         continue
       }
 
@@ -584,9 +582,7 @@ export class GameScene extends Phaser.Scene {
         carData.waiting = true
         // Still render at current position
         const pos = this.trafficSystem.getCarPosition(carData)
-        const nextPos = this.getNextPosition(carData)
-        const angle = Math.atan2(nextPos.y - pos.y, nextPos.x - pos.x)
-        car.draw(pos.x, pos.y, angle)
+        car.draw(pos.x, pos.y, pos.angle)
         continue
       }
 
@@ -611,25 +607,12 @@ export class GameScene extends Phaser.Scene {
         carData.pathIndex++
       }
 
-      // Draw car
+      // Draw car using angle from position calculation
       const pos = this.trafficSystem.getCarPosition(carData)
-      const nextPos = this.getNextPosition(carData)
-      const angle = Math.atan2(nextPos.y - pos.y, nextPos.x - pos.x)
-      car.draw(pos.x, pos.y, angle)
+      car.draw(pos.x, pos.y, pos.angle)
     }
   }
 
-  private getNextPosition(carData: CarData): { x: number, y: number } {
-    if (carData.pathIndex >= carData.path.length) {
-      const node = this.network.nodes.get(carData.destinationNodeId)!
-      return { x: node.x, y: node.y }
-    }
-
-    const edge = carData.path[carData.pathIndex]
-    const toNodeId = edge.from === carData.currentNodeId ? edge.to : edge.from
-    const toNode = this.network.nodes.get(toNodeId)!
-    return { x: toNode.x, y: toNode.y }
-  }
 
   private updatePlows(delta: number): void {
     const deltaSeconds = delta / 1000
